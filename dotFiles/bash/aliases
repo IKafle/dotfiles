@@ -1,0 +1,73 @@
+# Shortcut commands
+# Function with arguments
+
+
+
+#SWITCH TO TERMINAL SHORT CUTS
+alias tone='sudo chvt 1'                                
+alias ttwo='sudo chvt 2'
+alias tthree='sudo chvt 3'
+alias tfour='sudo chvt 4'
+alias tfive='sudo chvt 5'
+alias tsix='sudo chvt 6'
+alias tseven='sudo chvt 7'
+
+alias cls='clear && ls'
+
+
+
+# SHORT CUTS TO DOT FILES.
+alias en='sudo emacs -nw ~/.bin/dotFiles/bash/env'
+alias fun='sudo emacs -nw ~/.bin/dotFiles/bash/function'
+alias con='sudo emacs -nw ~/.bin/dotFiles/bash/config'
+alias al='sudo emacs -nw ~/.bin/dotFiles/bash/aliases'
+alias pr='sudo emacs -nw ~/.bin/dotFiles/bash/prompt'
+
+
+
+# BATTERY PERCENTAGE 
+alias y='upower -i $(upower -e | grep BAT) | grep --color=never -E "state|to\ full|to\ empty|percentage"' 
+
+
+# CHANGE DIRECTORIES SHORT CUTS
+alias one='cd ..'
+alias two='cd ../../'
+alias three='cd ../../../'
+alias four='cd ../../../../'
+alias five='cd ../../../../../'
+
+
+
+#FIX BRIGHTNESS ISSUE IN XFCE4.12
+
+#MIN BRIGHTNESS
+alias minone='xbacklight -10'
+alias mintwo='xbacklight -20'
+alias minthree='xbacklight -30'
+alias minfour='xbacklight -40'
+alias minfive='xbacklight -50'
+alias minsix='xbacklight -60'
+alias minseven='xbacklight -70'
+alias mineight='xbacklight -80'
+
+
+
+#MIN BRIGHTNESS
+alias maxone='xbacklight +10'
+alias maxtwo='xbacklight +20'
+alias maxthree='xbacklight +30'
+alias maxfour='xbacklight +40'
+alias maxfive='xbacklight +50'
+alias maxsix='xbacklight +60'
+alias maxseven='xbacklight +70'
+alias maxeight='xbacklight +80'
+
+#alias parent="git show-branch | grep '*' | grep -v "$(git rev-parse --abbrev-ref HEAD)" | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//'"
+export NODE_OPTIONS="--max-old-space-size=5120"
+
+
+#django alias
+alias runserver='python manage.py runserver'
+alias deactivate='conda deactivate'
+alias rungocchii='conda activate gocchii'
+alias runmhc='conda activate python37'
