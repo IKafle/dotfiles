@@ -22,7 +22,7 @@ alias fun='sudo emacs -nw ~/.bin/dotFiles/bash/function'
 alias con='sudo emacs -nw ~/.bin/dotFiles/bash/config'
 alias al='sudo emacs -nw ~/.bin/dotFiles/bash/aliases'
 alias pr='sudo emacs -nw ~/.bin/dotFiles/bash/prompt'
-alias lisnepal='cd ~/Desktop/vpn && sudo openvpn --config ishwor.kafle@pdc01.lisnepal.com.np__ssl_vpn_config.ovpn'
+
 
 
 # BATTERY PERCENTAGE 
@@ -75,9 +75,8 @@ alias runmhc='conda activate python37'
 # raizor docker container
 alias up='docker/sdk up -x'
 alias cli='docker/sdk cli -x'
-alias dc='docker/sdk up -x && docker/sdk cli -x'
-alias console='docker/sdk console'
-alias generate='docker/sdk console transfer:generate'
-alias propel='docker/sdk console propel:install'
-alias clean='docker/sdk clean && rm -rf vendor && rm -rf src/Generated && docker/sdk boot deploy.dev.yml && docker/sdk up --build --assets --data'
-alias runTests='docker/sdk console cache:class-resolver:build && docker/sdk testing -x codecept run -c codeception.acceptance.yml'
+alias dockercli='docker/sdk up -x && docker/sdk cli -x'
+alias sniff='vendor/bin/console code:sniff:style -f'
+alias stan='vendor/bin/phpstan analyze -c phpstan.neon src/ -l 5'
+alias dockerres='docker/sdk clean && rm -rf vendor && rm -rf src/Generated && docker/sdk boot deploy.dev.yml && docker/sdk up --build --assets --data'
+

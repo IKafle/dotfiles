@@ -16,6 +16,16 @@ if [ "$day" = "January1" ]
 then
 holgreet="Happy New Years. Have a Happy $year."
 
+# if it is your wife birthday
+elif [ "$day" = "January28" ]
+then
+holgreet="Tomorrow is your Wife Birthday, Better plan some surprises!"
+
+# if it is your wife birthday
+elif [ "$day" = "January29" ]
+then
+holgreet="Happy Birthday Wifey!"
+
 # if it is Groundhog Day
 elif [ "$day" = "February2" ]
 then
@@ -62,7 +72,7 @@ fi
 # display holiday greeting
 if [ "$hol" = "1" ]
 then
-echo $holgreet 
+echo $holgreet | cowthink
 
 elif [ "$hol" = "0" ]
 then
