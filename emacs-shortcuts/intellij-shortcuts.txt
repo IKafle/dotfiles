@@ -1,6 +1,0 @@
-Text Navigation
-
-fn (long press) + right-arrow  = move to end of line or vice versa(left arrow)
-
-ctrl + right-arrow = move to right by one word or vice versa (left arrow)
-
