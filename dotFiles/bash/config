@@ -29,7 +29,7 @@ holgreet="Happy Birthday Wifey!"
 # if it is Groundhog Day
 elif [ "$day" = "February2" ]
 then
-holgreet="Spring season is just around the corner $USER."
+holgreet="Spring season is here"
 
 # if it is Valentine's Day
 elif [ "$day" = "February14" ]
@@ -39,7 +39,7 @@ holgreet="Have a Happy Valentine's Day."
 # if it is April fool Day
 elif [ "$day" = "april1" ]
 then
-holgreet="Dude it's a APRIL FOOL DAY today  beware."
+holgreet="APRIL FOOL'S DAY TODAY!"
 
 # if it is my birthday
 elif [ "$day" = "february28" ]
@@ -49,7 +49,7 @@ holgreet="Have a Happy Birthday $USER."
 # if it is Halloween
 elif [ "$day" = "October31" ]
 then
-holgreet="Happy Halloween.Time for some horror movies $USER"
+holgreet="Happy Halloween"
 
 # if it is Christmas Eve
 elif [ "$day" = "December24" ]
