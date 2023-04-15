@@ -2,13 +2,13 @@
 export PATH=$PATH:~/bin  # Adding ~/bin directory to PATH.
 
 #MOUNTED DIRECTORIES COLOR LISTING
-#export LS_COLORS='ow=07;33:'
+export LS_COLORS='ow=07;33:'
 
 
 #SET DIFFERENT COLORS FOR DIFFERENT KIND OF FILES
 #alias ls='ls --color'
-LS_COLORS='ow=4;93;40:di=1;31;47:fi=0:ln=31:pi=5:so=5:bd=5:cd=5:or=31:mi=0:ex=35:*.rpm=90'
-export LS_COLORS
+#LS_COLORS='ow=4;93;40:di=1;31;47:fi=0:ln=31:pi=5:so=5:bd=5:cd=5:or=31:mi=0:ex=35:*.rpm=90'
+#export LS_COLORS
 
 
 ############################### MAVEN SET UP #####################################################################
@@ -23,3 +23,7 @@ export PATH=$PATH:$MAVEN_HOME/bin
 ################################# JAVA SET UP  ###########################################################
 export JAVA_HOME=/opt/jdk-17
 export PATH=$PATH:$JAVA_HOME/bin
+
+################################### IMGUR-SCREENSHOT ####################################################
+export IMGUR_SCREENSHOT=/opt/screenshot
+export PATH=$PATH:$IMGUR_SCREENSHOT
