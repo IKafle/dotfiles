@@ -33,12 +33,12 @@ alias five='cd ../../../../../'
 #alias parent="git show-branch | grep '*' | grep -v "$(git rev-parse --abbrev-ref HEAD)" | head -n1 | sed 's/.*\[\(#.*\)\].*/\1/' | sed 's/[\^~].*//'"
 export NODE_OPTIONS="--max-old-space-size=5120"
 
-# raizor docker container
-alias up='docker/sdk up -x'
-alias cli='docker/sdk cli -x'
-alias dc='docker/sdk up -x && docker/sdk cli -x'
-alias console='docker/sdk console'
-alias generate='docker/sdk console transfer:generate'
-alias propel='docker/sdk console propel:install'
-alias clean='docker/sdk clean && rm -rf vendor && rm -rf src/Generated && docker/sdk boot deploy.dev.yml && docker/sdk up --build --assets --data'
-alias runTests='docker/sdk console cache:class-resolver:build && docker/sdk testing -x codecept run -c codeception.acceptance.yml'
+alias mse='python ~/playground/workstation/python/lis/mouse.py'
+
+
+alias dev="cd ~/playground/workstation/"
+alias gs="git status"
+alias gp="git pull"
+alias gb="git branch"
+alias ga="git add ."
+alias gc="git commit -m $1"

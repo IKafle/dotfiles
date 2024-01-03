@@ -21,9 +21,15 @@ export PATH=$PATH:$MAVEN_HOME/bin
 #export PATH=$PATH:$IDEA_HOME/bin
 
 ################################# JAVA SET UP  ###########################################################
-export JAVA_HOME=/opt/jdk-17
+export JAVA_HOME=/opt/jdk-1.8
 export PATH=$PATH:$JAVA_HOME/bin
 
 ################################### IMGUR-SCREENSHOT ####################################################
 export IMGUR_SCREENSHOT=/opt/screenshot
 export PATH=$PATH:$IMGUR_SCREENSHOT
+
+export GOOGLE_APPLICATION_CREDENTIALS=/home/ishworkafle/Documents/adc.json
+export PATH=$PATH:$GOOGLE_APPLICATION_CREDENTIALS
+
+export PYTHONPATH="/home/ishworkafle/playground/workstation/python/lis/srp/solid"
+export PATH=$PATH:$PYTHONPATH
