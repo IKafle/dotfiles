@@ -1,4 +1,18 @@
- 
+# Git alias ⬇️
+#[alias]
+    #nah = "!f(){ git reset --hard; git clean -df; if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then git rebase --abort; fi; }; f"
+
+
+# git nah! https://laravel-news.com/the-ultimate-git-nah-alias?ref=dailydev
+nah () {
+    git reset --hard
+    git clean -df
+    if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then
+        git rebase --abort
+    fi
+}
+
+
 
 # bash functions that are frequently used.
 
