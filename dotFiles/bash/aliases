@@ -41,4 +41,14 @@ alias gs="git status"
 alias gp="git pull"
 alias gb="git branch"
 alias ga="git add ."
-alias gc="git commit -m $1"
+alias cm="git commit -m $1"
+
+
+alias vlog="vtex login dunnesstoresqa"
+alias vw="vtex whoami"
+alias vls='vtex workspace ls'
+alias vu='vtex workspace use $1'
+alias vd='vtex workspace delete $1'
+alias vl='vtex link'
+alias vul='vtex unlink'
+alias vout='vtex logout'

@@ -28,8 +28,8 @@ export PATH=$PATH:$JAVA_HOME/bin
 export IMGUR_SCREENSHOT=/opt/screenshot
 export PATH=$PATH:$IMGUR_SCREENSHOT
 
-export GOOGLE_APPLICATION_CREDENTIALS=/home/ishworkafle/Documents/adc.json
-export PATH=$PATH:$GOOGLE_APPLICATION_CREDENTIALS
+export VS_CODE=/opt/vscode
+export PATH=$PATH:$VS_CODE/bin
 
 export PYTHONPATH="/home/ishworkafle/playground/workstation/python/lis/srp/solid"
 export PATH=$PATH:$PYTHONPATH
