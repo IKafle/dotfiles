@@ -37,6 +37,7 @@ alias mse='python ~/playground/workstation/python/lis/mouse.py'
 
 
 alias dev="cd ~/playground/workstation/"
+alias g='git'
 alias gs="git status"
 alias gp="git pull"
 alias gb="git branch"
