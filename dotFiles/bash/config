@@ -1,82 +1,30 @@
-# Prompt
-# Shell settings
+# Shell config — holiday greetings and session settings
 
-
-# get current day (Month-Day Format)
-day=$(date +"%B%e")
-
-# get current year (for new years greeting)
+# Use %-d to avoid space-padding on single-digit days (fixes "January 1" vs "January1")
+day=$(date +"%B%-d")
 year=$(date +"%Y")
-
-# make sure the holiday greeting is displayed (if any)
 hol=1
 
-# if it is New Year's Day
-if [ "$day" = "January1" ]
-then
-holgreet="Happy New Years. Have a Happy $year."
-
-# if it is your wife birthday
-elif [ "$day" = "January28" ]
-then
-holgreet="Tomorrow is your Wife Birthday, Better plan some surprises!"
-
-# if it is your wife birthday
-elif [ "$day" = "January29" ]
-then
-holgreet="Happy Birthday Wifey!"
-
-# if it is Groundhog Day
-elif [ "$day" = "February2" ]
-then
-holgreet="Spring season is here"
-
-# if it is Valentine's Day
-elif [ "$day" = "February14" ]
-then
-holgreet="Have a Happy Valentine's Day."
-
-# if it is April fool Day
-elif [ "$day" = "april1" ]
-then
-holgreet="APRIL FOOL'S DAY TODAY!"
-
-# if it is my birthday
-elif [ "$day" = "february28" ]
-then
-holgreet="Have a Happy Birthday $USER."
-
-# if it is Halloween
-elif [ "$day" = "October31" ]
-then
-holgreet="Happy Halloween"
-
-# if it is Christmas Eve
-elif [ "$day" = "December24" ]
-then
-holgreet="Merry Christmas Eve."
-
-# if it is Christmas
-elif [ "$day" = "December25" ]
-then
-holgreet="Merry Christmas."
-
-# if it is New Year's Eve
-elif [ "$day" = "December31" ]
-then
-holgreet="Happy New Year's Eve."
-else
-hol=0
+if   [ "$day" = "January1"    ]; then holgreet="Happy New Year! Have a great $year."
+elif [ "$day" = "January28"   ]; then holgreet="Tomorrow is your Wife's Birthday — better plan something special!"
+elif [ "$day" = "January29"   ]; then holgreet="Happy Birthday Wifey! 🎂"
+elif [ "$day" = "February2"   ]; then holgreet="Spring season is here."
+elif [ "$day" = "February14"  ]; then holgreet="Happy Valentine's Day ❤️"
+elif [ "$day" = "February28"  ]; then holgreet="Happy Birthday $USER! Have a wonderful day 🎉"
+elif [ "$day" = "April1"      ]; then holgreet="April Fool's Day — watch your back!"
+elif [ "$day" = "October31"   ]; then holgreet="Happy Halloween 🎃"
+elif [ "$day" = "December24"  ]; then holgreet="Merry Christmas Eve!"
+elif [ "$day" = "December25"  ]; then holgreet="Merry Christmas! 🎄"
+elif [ "$day" = "December31"  ]; then holgreet="Happy New Year's Eve — almost there!"
+else hol=0
 fi
 
-# display holiday greeting
-if [ "$hol" = "1" ]
-then
-echo $holgreet | cowthink
-
-elif [ "$hol" = "0" ]
-then
-randomvarthatsomehowimportant=0
+if [ "$hol" = "1" ]; then
+    if command -v cowsay &>/dev/null; then
+        echo "$holgreet" | cowsay
+    else
+        echo "  🎉 $holgreet"
+    fi
 fi
 
-
+unset day year hol holgreet

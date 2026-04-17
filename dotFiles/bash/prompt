@@ -7,7 +7,7 @@
 #PS1="\u@\H\w\n\t \$ "
 #PS1="\e]2;\$(pwd)\a\e]1;\$(pwd)\a\e[31;1m\$(s=\$(printf "%*s" \$COLUMNS); echo \${s// /―})\n)\e[0m "
 #PS1='\u@\h:\w [$?]\$ '
-#PS1="" 
+PS1="" 
 #PS1='\[\e]0;\w\a\]\n\[\e[32m\]\u@\h: \[\e[33m\]\w\[\e[0m\]\n\$ '
 
 #PS1="\h# \e[30;1m\w\e[0m\n\$ "
@@ -16,7 +16,7 @@
 
 # PS1='\[\033[01;31m\]\u\[\033[01;36m\]@\[\033[01;32m\]\h\[\033[01;33m\]:\[\033[01;33m\]\w\n\[\033[01;31m\]\$ \[\033[00;32m\]'	# red, cyan, green, yellow with green output
 
- PS1="\[\033[01;32m\]\u@\h\[\033[01;34m\] \w \$\[\033[00m\] "					# green and blue prompt with pc name & default black output
+ #PS1="\[\033[01;32m\]\u@\h\[\033[01;34m\] \w \$\[\033[00m\] "					# green and blue prompt with pc name & default black output
 
  # PS1="\[\033[0;31m\][\u] [ \w ] \[\033[0m\] \n # "						# red with default black output (2-tier)
 

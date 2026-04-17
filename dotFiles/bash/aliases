@@ -1,55 +1,84 @@
+# ── Navigation ───────────────────────────────────────────────
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias -- -='cd -'                        # go back to previous dir
 
+# ── Listing ───────────────────────────────────────────────────
+alias ls='ls --color=auto'
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias cls='clear && ls'
 
-#SWITCH TO TERMINAL SHORT CUTS
-alias tone='sudo chvt 1'                                
+# ── Safer defaults ────────────────────────────────────────────
+alias cp='cp -i'                         # prompt before overwrite
+alias mv='mv -i'                         # prompt before overwrite
+alias mkdir='mkdir -pv'                  # make parents + verbose
+
+# ── Readable system commands ──────────────────────────────────
+alias df='df -h'
+alias du='du -sh'
+alias free='free -h'
+alias psg='ps aux | grep -v grep | grep' # usage: psg python
+alias ports='ss -tulpn'                  # listening ports
+alias myip='curl -s ifconfig.me'         # external IP
+alias iplocal='hostname -I | awk "{print \$1}"'
+
+# ── Git ───────────────────────────────────────────────────────
+alias g='git'
+alias gs='git status'
+alias ga='git add'
+alias gaa='git add .'
+alias gp='git pull'
+alias gpu='git push'
+alias gb='git branch'
+alias gd='git diff'
+alias gds='git diff --staged'
+alias gst='git stash'
+alias gsp='git stash pop'
+alias gl='git log --oneline --graph --decorate --all'
+# NOTE: cm() and gc() are defined in dev-tools — aliases cannot take arguments
+
+# ── Docker ────────────────────────────────────────────────────
+alias dps='docker ps'
+alias dpsa='docker ps -a'
+alias di='docker images'
+alias dc='docker compose'
+alias dcu='docker compose up -d'
+alias dcd='docker compose down'
+# dlogs() is defined in dev-tools (a function, not an alias, so it can show usage)
+
+# ── Python ────────────────────────────────────────────────────
+alias py='python3'
+alias pip='pip3'
+
+# ── Vault shortcuts ───────────────────────────────────────────
+alias vault='cd ~/vault'
+alias inbox='ls ~/vault/inbox'
+alias dev='cd ~/vault/code'
+
+# ── VPN (path updated to vault location) ─────────────────────
+alias lisnepal='sudo openvpn --config ~/vault/work/vpn/lis-vpn-config.ovpn~'
+
+# ── Edit dotFiles quickly (uses $EDITOR, falls back to vim) ───
+_dotedit() { ${EDITOR:-vim} "$1"; }
+alias en='_dotedit ~/.bin/dotFiles/bash/env'
+alias al='_dotedit ~/.bin/dotFiles/bash/aliases'
+alias fun='_dotedit ~/.bin/dotFiles/bash/function'
+alias con='_dotedit ~/.bin/dotFiles/bash/config'
+alias pr='_dotedit ~/.bin/dotFiles/bash/prompt'
+
+# ── Shell ─────────────────────────────────────────────────────
+alias reload='source ~/.bashrc && echo "Shell reloaded."'
+alias battery='upower -i $(upower -e | grep BAT) | grep -E "state|to full|to empty|percentage"'
+alias settings='gnome-control-center'
+
+# ── Virtual terminal switching ────────────────────────────────
+alias tone='sudo chvt 1'
 alias ttwo='sudo chvt 2'
 alias tthree='sudo chvt 3'
 alias tfour='sudo chvt 4'
 alias tfive='sudo chvt 5'
 alias tsix='sudo chvt 6'
 alias tseven='sudo chvt 7'
-
-alias cls='clear && ls'
-
-# SHORT CUTS TO DOT FILES.
-alias en='sudo emacs -nw ~/.bin/dotFiles/bash/env'
-alias fun='sudo emacs -nw ~/.bin/dotFiles/bash/function'
-alias con='sudo emacs -nw ~/.bin/dotFiles/bash/config'
-alias al='sudo emacs -nw ~/.bin/dotFiles/bash/aliases'
-alias pr='sudo emacs -nw ~/.bin/dotFiles/bash/prompt'
-alias lisnepal='cd ~/Desktop/vpn && sudo openvpn --config ishwor.kafle@pdc01.lisnepal.com.np__ssl_vpn_config.ovpn'
-
-
-# BATTERY PERCENTAGE 
-alias y='upower -i $(upower -e | grep BAT) | grep --color=never -E "state|to\ full|to\ empty|percentage"' 
-
-# CHANGE DIRECTORIES SHORT CUTS
-alias one='cd ..'
-alias two='cd ../../'
-alias three='cd ../../../'
-alias four='cd ../../../../'
-alias five='cd ../../../../../'
-
-#alias parent="git show-branch | grep '*' | grep -v "$(git rev-parse --abbrev-ref HEAD)" | head -n1 | sed 's/.*\[\(#.*\)\].*/\1/' | sed 's/[\^~].*//'"
-export NODE_OPTIONS="--max-old-space-size=5120"
-
-alias mse='python ~/playground/workstation/python/lis/mouse.py'
-
-
-alias dev="cd ~/playground/workstation/"
-alias g='git'
-alias gs="git status"
-alias gp="git pull"
-alias gb="git branch"
-alias ga="git add ."
-alias cm="git commit -m $1"
-
-
-alias vlog="vtex login dunnesstoresqa"
-alias vw="vtex whoami"
-alias vls='vtex workspace ls'
-alias vu='vtex workspace use $1'
-alias vd='vtex workspace delete $1'
-alias vl='vtex link'
-alias vul='vtex unlink'
-alias vout='vtex logout'

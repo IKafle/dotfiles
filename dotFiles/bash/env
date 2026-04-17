@@ -1,35 +1,47 @@
+# ── PATH helper: only add a dir if it actually exists ────────
+_pathdd() { [[ -d "$1" ]] && export PATH="$1:$PATH"; }
 
-export PATH=$PATH:~/bin  # Adding ~/bin directory to PATH.
+# ── Core user paths ──────────────────────────────────────────
+_pathdd "$HOME/bin"
+_pathdd "$HOME/.local/bin"
+_pathdd "$HOME/.npm-global/bin"
 
-#MOUNTED DIRECTORIES COLOR LISTING
+# ── Maven ────────────────────────────────────────────────────
+export MAVEN_HOME=/opt/apache-maven
+_pathdd "$MAVEN_HOME/bin"
+
+# ── Java ─────────────────────────────────────────────────────
+export JAVA_HOME=/opt/jdk-1.8
+_pathdd "$JAVA_HOME/bin"
+
+# ── PyCharm ──────────────────────────────────────────────────
+export IDEA_HOME="$HOME/vault/apps/pycharm-2024"
+_pathdd "$IDEA_HOME/bin"
+
+# ── VS Code ──────────────────────────────────────────────────
+export VS_CODE=/opt/vscode
+_pathdd "$VS_CODE/bin"
+
+# ── Screenshot tool ──────────────────────────────────────────
+export IMGUR_SCREENSHOT=/opt/screenshot
+_pathdd "$IMGUR_SCREENSHOT"
+
+# ── Colour for directory listings ────────────────────────────
 export LS_COLORS='ow=07;33:'
 
+# ── Node.js heap size ────────────────────────────────────────
+export NODE_OPTIONS="--max-old-space-size=5120"
 
-#SET DIFFERENT COLORS FOR DIFFERENT KIND OF FILES
-#alias ls='ls --color'
-#LS_COLORS='ow=4;93;40:di=1;31;47:fi=0:ln=31:pi=5:so=5:bd=5:cd=5:or=31:mi=0:ex=35:*.rpm=90'
-#export LS_COLORS
+# ── Python project path ──────────────────────────────────────
+# NOTE: PYTHONPATH is for Python module resolution only — never add it to PATH
+# Uncomment and update when working on this project:
+# export PYTHONPATH="$HOME/vault/code/python/lis/srp/solid"
 
+# ── Default editor (picks first available) ───────────────────
+if   command -v code &>/dev/null; then export EDITOR="code --wait"; export VISUAL="code --wait"
+elif command -v vim  &>/dev/null; then export EDITOR=vim;            export VISUAL=vim
+elif command -v nano &>/dev/null; then export EDITOR=nano;           export VISUAL=nano
+fi
 
-############################### MAVEN SET UP #####################################################################
-export MAVEN_HOME=/opt/apache-maven
-export PATH=$PATH:$MAVEN_HOME/bin
-
-
-###################################### INTELLIJ IDEA  ######################################################################
-#export IDEA_HOME=/opt/idea/
-#export PATH=$PATH:$IDEA_HOME/bin
-
-################################# JAVA SET UP  ###########################################################
-export JAVA_HOME=/opt/jdk-1.8
-export PATH=$PATH:$JAVA_HOME/bin
-
-################################### IMGUR-SCREENSHOT ####################################################
-export IMGUR_SCREENSHOT=/opt/screenshot
-export PATH=$PATH:$IMGUR_SCREENSHOT
-
-export VS_CODE=/opt/vscode
-export PATH=$PATH:$VS_CODE/bin
-
-export PYTHONPATH="/home/ishworkafle/playground/workstation/python/lis/srp/solid"
-export PATH=$PATH:$PYTHONPATH
+# Cleanup helper — don't leak into shell environment
+unset -f _pathdd

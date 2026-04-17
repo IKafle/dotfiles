@@ -1,20 +1,9 @@
-              # Loaded for logins and scripts.
+# Loaded for logins and interactive shells
 
-              # Run Scripts
-
-
-
-
-      #sh ~/.screenlayout/arander.sh
-           
-      . ~/.bin/dotFiles/bash/env
-     
-      . ~/.bin/dotFiles/bash/config
-
-      . ~/.bin/dotFiles/bash/aliases
-
-      . ~/.bin/dotFiles/bash/prompt
-
-      . ~/.bin/dotFiles/bash/function
-
-      . ~/.bin/dotFiles/bash/fancy-git.sh
+. ~/.bin/dotFiles/bash/env
+. ~/.bin/dotFiles/bash/config
+. ~/.bin/dotFiles/bash/aliases
+. ~/.bin/dotFiles/bash/function
+. ~/.bin/dotFiles/bash/dev-tools
+. ~/.bin/dotFiles/bash/fancy-git.sh
+. ~/.bin/dotFiles/bash/motd
