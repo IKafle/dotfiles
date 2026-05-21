@@ -77,6 +77,7 @@ OS_CODENAME_OVERRIDE=""
 PRETTY_NAME_DETECTED=""
 SUDO_KEEPALIVE_PID=""
 USER_GROUP_ADDED=0
+TIPS_HEADER_PRINTED=0
 
 # ── Logging ─────────────────────────────────────────────────────────────────
 # Safe even before LOG_DIR exists: falls back to stderr.
@@ -687,6 +688,60 @@ verify_compose() {
     say ""
 }
 
+# ── Post-install tips ─────────────────────────────────────────────────────
+# Surface non-obvious Engine customization paths and coexistence quirks.
+# Each check is stateful — once the user has acted on a tip (e.g. created
+# /etc/docker/daemon.json), the corresponding line stops firing on re-runs.
+emit_tip_header() {
+    (( TIPS_HEADER_PRINTED )) && return
+    say ""
+    say "  Tips you might not know:"
+    TIPS_HEADER_PRINTED=1
+}
+
+print_optional_tips() {
+    # 1. /etc/docker/daemon.json is the canonical place to tune the daemon
+    # (registry mirrors, log-driver/log-opts, default-address-pools, storage
+    # driver). It's not created by the .deb — surface that the file is
+    # missing/empty so the user knows the knob exists.
+    local daemon_json="/etc/docker/daemon.json"
+    local needs_daemon_tip=0
+    if [[ ! -e "$daemon_json" ]]; then
+        needs_daemon_tip=1
+    elif [[ -r "$daemon_json" ]]; then
+        # Treat an empty {} (or completely empty file) as "untouched".
+        local _normalized
+        _normalized=$(tr -d '[:space:]' < "$daemon_json" 2>/dev/null || true)
+        [[ -z "$_normalized" || "$_normalized" == "{}" ]] && needs_daemon_tip=1
+    fi
+    if (( needs_daemon_tip )); then
+        emit_tip_header
+        say "    • /etc/docker/daemon.json is empty — that's the canonical place"
+        say "      to tune the daemon (registry mirrors, log rotation, address pools,"
+        say "      storage driver). Edit it, then: sudo systemctl reload docker"
+    fi
+
+    # 2. If Docker Desktop is also installed on this host, the user has two
+    # contexts and 'docker ps' targets whichever is active — common source of
+    # 'where did my containers go?' confusion.
+    if [[ -e /opt/docker-desktop/bin/com.docker.backend ]]; then
+        emit_tip_header
+        say "    • Docker Desktop is also installed — you have multiple contexts:"
+        say "        docker context ls"
+        say "        docker context use default        # this Engine (local socket)"
+        say "        docker context use desktop-linux  # Docker Desktop (VM)"
+    fi
+
+    # 3. The standalone docker-compose v1 package coexists awkwardly with the
+    # v2 plugin (which we install). Flag it so the user can drop v1.
+    if package_installed docker-compose 2>/dev/null; then
+        emit_tip_header
+        say "    • Legacy docker-compose v1 package is installed alongside the"
+        say "      v2 plugin. v1 is unmaintained; prefer 'docker compose' (no hyphen)."
+        say "      Remove v1: sudo apt-get remove docker-compose"
+    fi
+}
+
 # ── Main ───────────────────────────────────────────────────────────────────
 main() {
     say "╔═══════════════════════════════════════════════════════════╗"
@@ -741,6 +796,9 @@ main() {
     say "    docker ps"
     say "    docker compose version"
     say "    tail -f $LOG_FILE"
+
+    print_optional_tips
+
     say "─────────────────────────────────────────────────────────"
     say ""
 

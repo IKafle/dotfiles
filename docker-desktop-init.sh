@@ -33,7 +33,7 @@ fi
 #   bash docker-desktop-init.sh --allow-unsupported-os   # proceed on unlisted Ubuntu
 #
 # Requirements:
-#   - Ubuntu 22.04 / 24.04 / 24.10 (jammy / noble / oracular)
+#   - Ubuntu 24.04 LTS (noble) or 26.04 LTS (resolute)
 #   - x86_64 or arm64 with hardware virtualization (VT-x / AMD-V) enabled
 #   - sudo (or root) for system packages, run as your normal user (not root)
 #   - ~3-4 GB free disk, network access
@@ -54,8 +54,9 @@ readonly SCRIPT_VERSION="1.0.0"
 # Bump these alongside upstream: https://docs.docker.com/desktop/release-notes/
 # The "build" is the numeric component in Docker's CDN URL path for that
 # release. If unsure or the URL pattern changes, use --deb-url=<full-url>.
-readonly DEFAULT_DD_VERSION="4.38.0"
-readonly DEFAULT_DD_BUILD="181591"
+# Last verified: 2026-05-21 against docs.docker.com release notes.
+readonly DEFAULT_DD_VERSION="4.74.0"
+readonly DEFAULT_DD_BUILD="227015"
 
 LOG_DIR="${HOME:-${TMPDIR:-/tmp}}/.docker"
 LOG_FILE="${LOG_DIR}/docker-desktop-init.log"
@@ -65,7 +66,9 @@ readonly CACHE_DIR="/var/cache/docker-desktop-init"
 # Ubuntu codenames Docker Desktop officially supports (per docs.docker.com).
 # Debian / Mint / Pop!_OS are NOT supported by Docker Desktop on Linux — use
 # Docker Engine (docker-init.sh) on those.
-readonly SUPPORTED_UBUNTU_CODENAMES=(jammy noble oracular)
+# Last verified: 2026-05-21 — Docker dropped jammy (22.04) and the interim
+# releases (oracular 24.10); only the two current LTSes are listed upstream.
+readonly SUPPORTED_UBUNTU_CODENAMES=(noble resolute)
 
 # KVM / qemu packages: required for Docker Desktop's VM backend. The
 # arch-specific qemu-system-* package is appended at runtime once DD_ARCH
@@ -110,6 +113,7 @@ TARGET_USER=""
 TARGET_HOME=""
 TARGET_UID=""
 DEB_LOCAL_PATH=""
+TIPS_HEADER_PRINTED=0
 
 # ── Logging ─────────────────────────────────────────────────────────────────
 _ts() { date '+%Y-%m-%d %H:%M:%S'; }
@@ -891,6 +895,55 @@ smoke_test() {
     say ""
 }
 
+# ── Post-install tips ─────────────────────────────────────────────────────
+# Surface non-obvious Docker Desktop settings the user is likely to want to
+# know about: GUI flags that ship off-by-default, plus available CLI plugins.
+# All checks are best-effort — silent if the relevant state isn't readable.
+emit_tip_header() {
+    (( TIPS_HEADER_PRINTED )) && return
+    say ""
+    say "  Tips you might not know:"
+    TIPS_HEADER_PRINTED=1
+}
+
+print_optional_tips() {
+    # Best-effort: every check below silently no-ops if the relevant state
+    # isn't readable, so this is safe in dry-run and on fresh boxes too.
+    local settings="${TARGET_HOME}/.docker/desktop/settings-store.json"
+
+    if [[ -r "$settings" ]]; then
+        # 'EnableDockerAI' gates Ask Gordon, the AI panel, and the related
+        # GUI surfaces. The 'docker sandbox' / 'docker mcp' CLI plugins work
+        # independently, but the GUI integration is gated by this flag.
+        if grep -Eq '"EnableDockerAI"[[:space:]]*:[[:space:]]*false' "$settings"; then
+            emit_tip_header
+            say "    • Docker AI features (Ask Gordon, AI panel) are currently disabled."
+            say "      Toggle: Docker Desktop → Settings → Features → 'Docker AI', or"
+            say "      edit ~/.docker/desktop/settings-store.json: \"EnableDockerAI\": true"
+            say "      Then: systemctl --user restart docker-desktop"
+        fi
+
+        # 'AutoStart' controls whether the user-systemd service auto-starts
+        # on login. Off by default — most users want this on.
+        if grep -Eq '"AutoStart"[[:space:]]*:[[:space:]]*false' "$settings"; then
+            emit_tip_header
+            say "    • Docker Desktop won't start automatically on login."
+            say "      Toggle: Docker Desktop → Settings → General → 'Start when you log in', or"
+            say "      edit ~/.docker/desktop/settings-store.json: \"AutoStart\": true"
+        fi
+    fi
+
+    # Modern Docker Desktop (4.40+) ships 'docker sandbox' and 'docker mcp' as
+    # CLI plugins for AI agent workflows. Surface them once they exist —
+    # easy to miss otherwise.
+    if command -v docker >/dev/null 2>&1 && docker sandbox --help >/dev/null 2>&1; then
+        emit_tip_header
+        say "    • docker sandbox / docker mcp are available for AI agent workflows:"
+        say "        docker sandbox create --help     # provision an agent sandbox"
+        say "        docker mcp --help                # MCP Toolkit (catalog, clients)"
+    fi
+}
+
 # ── Main ───────────────────────────────────────────────────────────────────
 main() {
     say "╔═══════════════════════════════════════════════════════════╗"
@@ -948,6 +1001,9 @@ main() {
     say "    docker --context desktop-linux run --rm hello-world"
     say "    systemctl --user status docker-desktop"
     say "    tail -f $LOG_FILE"
+
+    print_optional_tips
+
     say "─────────────────────────────────────────────────────────"
     say ""
 
