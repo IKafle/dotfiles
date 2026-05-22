@@ -1,5 +1,8 @@
 # dev-tools — practical developer utility functions
 
+[[ -n "${_BX_MOD_dev_tools_LOADED:-}" ]] && return 0
+_BX_MOD_dev_tools_LOADED=1
+
 # ── Git ───────────────────────────────────────────────────────
 
 # git commit with message — fixes the broken "alias cm" that couldn't take args

@@ -1,3 +1,6 @@
+[[ -n "${_BX_MOD_functions_LOADED:-}" ]] && return 0
+_BX_MOD_functions_LOADED=1
+
 # Git alias ⬇️
 #[alias]
     #nah = "!f(){ git reset --hard; git clean -df; if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then git rebase --abort; fi; }; f"

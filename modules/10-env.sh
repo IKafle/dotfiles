@@ -1,3 +1,6 @@
+[[ -n "${_BX_MOD_env_LOADED:-}" ]] && return 0
+_BX_MOD_env_LOADED=1
+
 # ── PATH helper: only add a dir if it actually exists ────────
 _pathdd() { [[ -d "$1" ]] && export PATH="$1:$PATH"; }
 

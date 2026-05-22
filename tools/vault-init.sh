@@ -96,54 +96,12 @@ create_vault() {
     mkdir -p "$V"/{work/{resumes,docs,sheets,slides,architecture,vpn},school,learning,code,gallery,entertainment,apps,archives,inbox}
 }
 
-# ── Step 2: bashrc ───────────────────────────────────────────
-setup_bashrc() {
-    local dotfiles_bashrc="$H/.bin/dotFiles/bashrc"
-    local bashrc="$H/.bashrc"
-    local bashrc_bak="$H/.bashrc.bak"
-    local expected='. ~/.bin/dotFiles/bashrc'
-
-    echo ""
-    echo "── Step 1: .bashrc ─────────────────────────────────────"
-
-    if [ ! -f "$dotfiles_bashrc" ]; then
-        skip "~/.bin/dotFiles/bashrc not found — restore your .bin repo first, then re-run"
-        echo ""
-        return
-    fi
-
-    # Check if .bashrc is already the clean one-liner — nothing to do
-    local current
-    current=$(grep -v '^[[:space:]]*$' "$bashrc" 2>/dev/null || true)
-    if [ "$current" = "$expected" ]; then
-        skip "~/.bashrc already configured correctly"
-        echo ""
-        return
-    fi
-
-    # First time: back up whatever is there
-    if [ ! -f "$bashrc_bak" ]; then
-        cp "$bashrc" "$bashrc_bak"
-        ok "Backed up ~/.bashrc → ~/.bashrc.bak"
-    fi
-
-    printf '%s\n' "$expected" > "$bashrc"
-    ok "Wrote ~/.bashrc (sources ~/.bin/dotFiles/bashrc)"
-
-    if bash --norc -c "source $bashrc" 2>/dev/null; then
-        ok ".bashrc sources cleanly"
-    else
-        echo "  WARNING: .bashrc sourced with errors — check ~/.bin/dotFiles/bashrc"
-        echo "           Your backup is safe at ~/.bashrc.bak"
-    fi
-    echo ""
-}
-
-# ── Step 3: disable terminal bell ────────────────────────────
+# ── Step 1: disable terminal bell ────────────────────────────
 disable_bell() {
     local inputrc="$H/.inputrc"
 
-    echo "── Step 2: Terminal bell ────────────────────────────────"
+    echo ""
+    echo "── Step 1: Terminal bell ────────────────────────────────"
 
     if grep -q "bell-style none" "$inputrc" 2>/dev/null; then
         skip "Bell already disabled in ~/.inputrc"
@@ -298,7 +256,6 @@ main() {
     create_vault
 
     # System setup steps — each checks its own state before acting
-    setup_bashrc
     disable_bell
 
     # Open a new log section for this run
@@ -306,7 +263,7 @@ main() {
     log "vault-init.sh run at $(ts)"
     log "══════════════════════════════════════════"
 
-    echo "── Step 3: Organizing files ─────────────────────────────"
+    echo "── Step 2: Organizing files ─────────────────────────────"
 
     # Default source directories
     local sources=(

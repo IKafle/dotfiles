@@ -2,6 +2,9 @@
 #   new terminal  →  system info panel + compact shortcuts
 #   reload        →  single confirmation line
 
+[[ -n "${_BX_MOD_motd_LOADED:-}" ]] && return 0
+_BX_MOD_motd_LOADED=1
+
 __motd_full() {
     local R=$'\e[0m'
     local B=$'\e[1m'

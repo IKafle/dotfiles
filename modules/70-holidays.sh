@@ -1,5 +1,8 @@
 # Shell config — holiday greetings and session settings
 
+[[ -n "${_BX_MOD_holidays_LOADED:-}" ]] && return 0
+_BX_MOD_holidays_LOADED=1
+
 # Use %-d to avoid space-padding on single-digit days (fixes "January 1" vs "January1")
 day=$(date +"%B%-d")
 year=$(date +"%Y")

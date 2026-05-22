@@ -24,6 +24,9 @@
       return 1 2>/dev/null || exit 1
   fi
 
+  [[ -n "${_BX_MOD_docker_LOADED:-}" ]] && return 0
+  _BX_MOD_docker_LOADED=1
+
   # Guard: this file must be sourced (functions are useless when executed).
   # ${BASH_SOURCE[0]} differs from $0 only when sourced.
   if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then

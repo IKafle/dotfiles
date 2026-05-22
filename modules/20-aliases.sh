@@ -1,3 +1,6 @@
+[[ -n "${_BX_MOD_aliases_LOADED:-}" ]] && return 0
+_BX_MOD_aliases_LOADED=1
+
 # ── Navigation ───────────────────────────────────────────────
 alias ..='cd ..'
 alias ...='cd ../..'

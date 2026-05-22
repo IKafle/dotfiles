@@ -42,6 +42,14 @@ case ":$PATH:" in
     *) export PATH="$BX_HOME:$PATH" ;;
 esac
 
+# Clear any per-module load guards from a previous source so a re-source
+# (e.g. `bx reload`) actually re-loads the modules. The BX_VERSION guard
+# above means we only get here on a fresh-or-explicit load.
+for _bx_guard in $(compgen -v _BX_MOD_ 2>/dev/null); do
+    unset "$_bx_guard"
+done
+unset _bx_guard
+
 # ── Source every enabled module ───────────────────────────────────
 BX_MODULES_LOADED=0
 BX_MODULES_FAILED=""

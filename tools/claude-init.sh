@@ -11,7 +11,7 @@
 # What it does:
 #   1. Verifies python3 is installed (the status line is a Python script)
 #   2. Creates ~/.claude/ if it doesn't exist
-#   3. Symlinks ~/.claude/statusline.py → ~/.bin/dotFiles/claude/statusline.py
+#   3. Symlinks ~/.claude/statusline.py → ~/.bin/claude/statusline.py
 #      (so future edits in your .bin repo propagate via `git pull` alone)
 #   4. Merges the statusLine block into ~/.claude/settings.json without
 #      touching other keys like `model` or `theme`
@@ -22,13 +22,13 @@
 # Rules:
 #   - Never deletes anything; renames anything in the way to *.bak
 #   - Logs every action to ~/.claude/claude-init.log
-#   - Source of truth: ~/.bin/dotFiles/claude/statusline.py (git-tracked)
+#   - Source of truth: ~/.bin/claude/statusline.py (git-tracked)
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
 H="$HOME"
-SRC_DIR="$H/.bin/dotFiles/claude"
+SRC_DIR="$H/.bin/claude"
 SRC_SCRIPT="$SRC_DIR/statusline.py"
 CLAUDE_DIR="$H/.claude"
 DEST_SCRIPT="$CLAUDE_DIR/statusline.py"

@@ -1,3 +1,6 @@
+[[ -n "${_BX_MOD_prompt_LOADED:-}" ]] && return 0
+_BX_MOD_prompt_LOADED=1
+
 export GIT_PS1_SHOWUNTRACKEDFILES=true
 export GIT_PS1_SHOWCOLORHINTS=true
 export GIT_PS1_SHOWDIRTYSTATE=true
