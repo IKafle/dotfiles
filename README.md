@@ -17,6 +17,9 @@ bx new <name>     # scaffold a new module from template
 bx doctor         # health check: missing symlinks, failed modules, bashrc hook
 bx run <tool>     # run a one-shot tool from tools/  (e.g. bx run docker-init)
 bx tools          # list available tools
+bx plugin ls      # list plugins (external customizations like Argos scripts)
+bx plugin disable geekbar   # remove the external symlink (source kept)
+bx plugin enable  geekbar   # restore the external symlink
 bx install        # idempotently wire ~/.bashrc to source init.sh
 bx help           # show all commands
 ```
@@ -25,15 +28,18 @@ bx help           # show all commands
 
 ```
 ~/.bin/
-├── init.sh        # master loader (~/.bashrc sources this)
-├── bx             # the CLI command
-├── lib/           # shared helpers (color, logging)
-├── modules/       # all available modules (each is a .sh file)
-├── enabled/       # symlinks → modules/ — filesystem IS the truth
-├── tools/         # one-shot scripts (installers, init scripts)
-├── completions/   # bash completion scripts (auto-loaded by prompt module)
-├── claude/        # config consumed by Claude Code
-└── docs/          # notes & references
+├── init.sh           # master loader (~/.bashrc sources this)
+├── bx                # the CLI command
+├── CLAUDE.md         # contract for agents working in this tree
+├── lib/              # shared helpers (color, logging)
+├── modules/          # all available modules (each is a .sh file)
+├── enabled/          # symlinks → modules/ — filesystem IS the truth
+├── tools/            # one-shot scripts (installers, init scripts)
+├── plugins/          # customizations that live OUTSIDE ~/.bin/ (Argos, etc.)
+├── enabled-plugins/  # symlinks → plugins/ — like enabled/, for plugins
+├── completions/      # bash completion scripts (auto-loaded by prompt module)
+├── claude/           # config consumed by Claude Code
+└── docs/             # notes & references
 ```
 
 ## Module naming convention
@@ -80,3 +86,35 @@ Every new automation belongs here. That's the rule.
 | `claude-init`              | install Claude Code CLI                  |
 
 Run with `bx run <tool>` or directly: `bash ~/.bin/tools/<tool>.sh`.
+
+## Plugins (customizations that live outside `~/.bin/`)
+
+Some tools insist on finding their config at a specific path — Argos
+scripts at `~/.config/argos/`, GNOME extensions, systemd user units.
+Plugins keep the source-of-truth file in `~/.bin/plugins/` (so it's in
+git) and symlink it into the external location when enabled.
+
+```bash
+bx plugin ls                        # list plugins, ✔/✘
+bx plugin enable geekbar            # creates ~/.config/argos/geekbar.2s+.sh → plugins/
+bx plugin disable geekbar           # removes that symlink (source kept in plugins/)
+bx plugin new mywidget --kind argos # scaffold a new plugin
+bx plugin doctor                    # verify each enabled plugin's external symlink
+bx plugin help                      # full plugin subcommand reference
+```
+
+Plugin files live at `~/.bin/plugins/<name>.<kind>.sh` with header
+metadata:
+
+```bash
+# bx-purpose: GNOME panel widget showing system stats
+# bx-plugin-kind: argos
+# bx-plugin-target: ~/.config/argos/geekbar.2s+.sh
+```
+
+| plugin    | kind  | target                              |
+|-----------|-------|-------------------------------------|
+| `geekbar` | argos | `~/.config/argos/geekbar.2s+.sh`    |
+
+Supported kinds today: `argos`. Adding a new kind requires editing
+`_bx_plugin_apply` in `bx` — see `CLAUDE.md` for the contract.

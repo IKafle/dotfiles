@@ -47,6 +47,14 @@ or wire it into `~/.bashrc` directly, you have broken the contract.
     new lifecycle stage — you MUST update CLAUDE.md in the same change.
     See [Keeping this document accurate](#keeping-this-document-accurate)
     for the test.
+12. **Decide about README.md on every change.** Before you stop work,
+    ask: "Does this change alter what a *human reader* sees or does?"
+    If yes — new user-visible command, new top-level folder, new tool or
+    plugin, changed install steps, removed/renamed capability — update
+    `README.md` in the same change. If no — pure internal refactor, bug
+    fix without UX change, doc-only edit elsewhere — leave it. See
+    [Keeping README.md current](#keeping-readmemd-current) for the
+    test.
 
 ---
 
@@ -341,6 +349,49 @@ Failing any of these means more work to do; don't stop.
 - Always include the Co-Authored-By trailer when an agent authored the
   change.
 - Never push or open PRs without explicit user authorization.
+
+---
+
+## Keeping README.md current
+
+`README.md` is the user-facing introduction — the first thing a human
+collaborator (or the owner six months from now) reads. Unlike CLAUDE.md
+(which targets agents and is exhaustive), README.md is a curated
+overview. Every change should be evaluated against this test:
+
+> **"Would a human reading just the README still know how to use the
+> system after my change?"**
+
+If the answer is **no**, update README.md in the same commit.
+
+### Update README.md when…
+
+- A new user-facing `bx` command is added (e.g. you add `bx plugin`)
+- A new top-level folder appears (e.g. `plugins/`, `enabled-plugins/`)
+- A new tool is added to `tools/` (the tools table)
+- A new plugin is added that the owner should know exists
+- The install flow changes (e.g. `bx install` semantics change)
+- Folder layout changes (rename/move at the top level)
+- A capability is removed or its name changes
+- The "Quick start" command list omits something now-common
+
+### Do NOT update README.md for…
+
+- Bug fixes that don't change visible behavior
+- Internal refactors with no UX delta
+- Adding a routine module that fits existing conventions (it's not
+  worth listing every module in README; the user discovers them with
+  `bx ls`)
+- Changes to CLAUDE.md alone (agents read CLAUDE.md; humans don't need
+  to track its evolution in README)
+- Comment-only edits
+
+### How to update
+
+Match the existing tone — terse, command examples in fenced blocks,
+tables where structured data fits. Don't write paragraphs of prose;
+this README is meant to be skimmed. After updating, re-render in your
+head: would a new visitor land on the right answer in under 30 seconds?
 
 ---
 
