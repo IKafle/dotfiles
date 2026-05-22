@@ -1,0 +1,1 @@
+../modules/60-prompt.sh

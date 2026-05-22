@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# bx-purpose: install Docker Desktop (KVM-isolated) on Ubuntu/Debian
 # shellcheck shell=bash
 #
 # If invoked as `sh docker-desktop-init.sh` (or any non-bash POSIX shell),

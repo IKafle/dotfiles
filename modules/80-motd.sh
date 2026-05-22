@@ -39,6 +39,27 @@ __motd_full() {
     [[ -d "$HOME/vault/inbox" ]] \
         && inbox_count=$(find "$HOME/vault/inbox" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
 
+    # bx load status — derived from state set by ~/.bin/init.sh.
+    # During the initial load, BX_LOADED_AT is not yet set (init.sh sets it
+    # AFTER the loop). In that case we're still inside the source of motd
+    # itself, so add 1 to the count to include ourselves.
+    local bx_loaded=${BX_MODULES_LOADED:-0}
+    if [[ -z "${BX_LOADED_AT:-}" ]]; then
+        bx_loaded=$(( bx_loaded + 1 ))
+    fi
+    local bx_failed_count=0
+    if [[ -n "${BX_MODULES_FAILED:-}" ]]; then
+        bx_failed_count=$(printf '%s' "$BX_MODULES_FAILED" | tr ',' '\n' | grep -c .)
+    fi
+    local bx_line
+    if [[ -z "${BX_VERSION:-}" ]]; then
+        bx_line="${RD}${B}⚠ bx: not loaded${R} ${GR}— check ~/.bashrc${R}"
+    elif (( bx_failed_count > 0 )); then
+        bx_line="${YL}${B}⚠ bx${R} ${GR}: ${bx_loaded} loaded, ${bx_failed_count} failed — run \`bx doctor\`${R}"
+    else
+        bx_line="${GN}● bx${R} ${GR}: ${bx_loaded} modules loaded${R}"
+    fi
+
     # ── Helpers ───────────────────────────────────────────────
     _bar() {
         local p=$1 w=16 f e i bar_str="" col
@@ -81,6 +102,8 @@ __motd_full() {
         "$(_bar $dp)" "$(_pct $dp)" "$du" "$dt"
     printf "  ${GR}ip${R}      %s\n" "$ip"
 
+    printf "  ${GR}status${R}  %s\n" "$bx_line"
+
     if (( inbox_count > 0 )); then
         printf '\n'
         printf "  ${RD}${B}⚑  %d item(s) waiting in ~/vault/inbox${R}\n" "$inbox_count"
@@ -96,6 +119,7 @@ __motd_full() {
     printf "  ${CY}sys   ${R}battery  psg  dsize  ff\n"
     printf "  ${CY}edit  ${R}en  al  fun  con  pr                   reload\n"
     printf "  ${CY}dock  ${R}dps  dpsa  dcu  dcd  dlogs  docker_clean\n"
+    printf "  ${CY}bx    ${R}bx ls  bx enable  bx disable  bx reload  bx doctor  bx help\n"
     printf "  %s\n" "$SEP"
     printf "  ${GR}type ${R}${B}shortcuts${R}${GR} for the full reference with descriptions${R}\n\n"
 
@@ -110,10 +134,10 @@ __motd_reload() {
 
 # ── Entry point ───────────────────────────────────────────────
 if [[ $- == *i* ]]; then
-    if [[ "${DOTFILES_LOADED:-0}" == "1" ]]; then
+    if [[ "${BX_MOTD_SHOWN:-0}" == "1" ]]; then
         __motd_reload
     else
-        export DOTFILES_LOADED=1
+        export BX_MOTD_SHOWN=1
         __motd_full
     fi
 fi

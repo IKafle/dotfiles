@@ -4,7 +4,7 @@
   # Source this file to get three shell functions for switching between Docker
   # contexts without friction. Add this to your .bashrc or shell config:
   #
-  #   . ~/.bin/docker-context-switch.sh
+  #   . ~/.bin/modules/50-docker.sh
   #
   # Functions provided:
   #   sandbox        switch to Docker Desktop (isolated sandbox for AI agents)
@@ -29,7 +29,7 @@
   if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
       echo "Error: docker-context-switch.sh must be sourced, not executed" >&2
       echo "  → Add this to your ~/.bashrc:" >&2
-      echo "  →   . ~/.bin/docker-context-switch.sh" >&2
+      echo "  →   . ~/.bin/modules/50-docker.sh" >&2
       exit 1
   fi
 
@@ -48,8 +48,8 @@
       # Check if docker binary is available
       if ! command -v docker >/dev/null 2>&1; then
           echo "Error: docker is not installed or not in PATH"
-          echo "  → Install Docker Engine:   bash ~/.bin/docker-init.sh"
-          echo "  → Install Docker Desktop:  bash ~/.bin/docker-desktop-init.sh"
+          echo "  → Install Docker Engine:   bx run docker-init"
+          echo "  → Install Docker Desktop:  bx run docker-desktop-init"
           return 1
       fi
   }
@@ -59,7 +59,7 @@
       docker context --help >/dev/null 2>&1 || {
           echo "Error: this docker is too old to support contexts"
           echo "  → docker context requires docker >= 19.03"
-          echo "  → Reinstall:  bash ~/.bin/docker-init.sh"
+          echo "  → Reinstall:  bx run docker-init"
           return 1
       }
   }
@@ -257,7 +257,7 @@
       if ! _dcs_context_exists "$_DCS_CTX_DESKTOP"; then
           echo "Error: Docker Desktop context '$_DCS_CTX_DESKTOP' not found"
           echo "  → Docker Desktop is not installed or hasn't created its context."
-          echo "  → Install it: bash ~/.bin/docker-desktop-init.sh"
+          echo "  → Install it: bx run docker-desktop-init"
           echo "  → Or launch Docker Desktop once so it registers the context"
           echo "  → Verify: docker context ls"
           echo "  → Then try again: sandbox"
@@ -300,7 +300,7 @@
       if ! _dcs_context_exists "$_DCS_CTX_ENGINE"; then
           echo "Error: Docker Engine context '$_DCS_CTX_ENGINE' not found"
           echo "  → Docker Engine may not be installed."
-          echo "  → Install it: bash ~/.bin/docker-init.sh"
+          echo "  → Install it: bx run docker-init"
           echo "  → Verify: docker context ls"
           echo ""
           return 1
@@ -370,13 +370,13 @@
       if _dcs_context_exists "$_DCS_CTX_ENGINE"; then
           echo "  $_DCS_CTX_ENGINE (Docker Engine)     present"
       else
-          echo "  $_DCS_CTX_ENGINE (Docker Engine)     NOT FOUND → bash ~/.bin/docker-init.sh"
+          echo "  $_DCS_CTX_ENGINE (Docker Engine)     NOT FOUND → bx run docker-init"
       fi
 
       if _dcs_context_exists "$_DCS_CTX_DESKTOP"; then
           echo "  $_DCS_CTX_DESKTOP (Docker Desktop)   present"
       else
-          echo "  $_DCS_CTX_DESKTOP (Docker Desktop)   NOT FOUND → bash ~/.bin/docker-desktop-init.sh"
+          echo "  $_DCS_CTX_DESKTOP (Docker Desktop)   NOT FOUND → bx run docker-desktop-init"
       fi
 
       echo ""

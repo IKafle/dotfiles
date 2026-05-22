@@ -1,0 +1,20 @@
+# Editor backups
+*~
+*.swp
+*.swo
+.#*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Python cache (statusline.py & friends)
+__pycache__/
+*.pyc
+
+# Local-only overrides (don't commit machine-specific tweaks)
+local/
+*.local
+
+# Runtime state
+/tmp/.bx-load-err.*

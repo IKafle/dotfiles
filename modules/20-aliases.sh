@@ -61,13 +61,15 @@ alias dev='cd ~/vault/code'
 # ── VPN (path updated to vault location) ─────────────────────
 alias lisnepal='sudo openvpn --config ~/vault/work/vpn/lis-vpn-config.ovpn~'
 
-# ── Edit dotFiles quickly (uses $EDITOR, falls back to vim) ───
+# ── Edit modules quickly (uses $EDITOR, falls back to vim) ───
+# These all live under ~/.bin/modules/ now. For arbitrary module editing
+# (with auto-reload), use:  bx edit <name>
 _dotedit() { ${EDITOR:-vim} "$1"; }
-alias en='_dotedit ~/.bin/dotFiles/bash/env'
-alias al='_dotedit ~/.bin/dotFiles/bash/aliases'
-alias fun='_dotedit ~/.bin/dotFiles/bash/function'
-alias con='_dotedit ~/.bin/dotFiles/bash/config'
-alias pr='_dotedit ~/.bin/dotFiles/bash/prompt'
+alias en='_dotedit ~/.bin/modules/10-env.sh'
+alias al='_dotedit ~/.bin/modules/20-aliases.sh'
+alias fun='_dotedit ~/.bin/modules/30-functions.sh'
+alias con='_dotedit ~/.bin/modules/70-holidays.sh'
+alias pr='_dotedit ~/.bin/modules/60-prompt.sh'
 
 # ── Shell ─────────────────────────────────────────────────────
 alias reload='source ~/.bashrc && echo "Shell reloaded."'

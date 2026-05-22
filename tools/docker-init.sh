@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# bx-purpose: install Docker Engine + Compose v2 + Buildx on Ubuntu/Debian
 # shellcheck shell=bash
 #
 # If invoked as `sh docker-init.sh` (or any non-bash POSIX shell), the array

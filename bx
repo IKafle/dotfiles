@@ -1,0 +1,407 @@
+#!/usr/bin/env bash
+# bx — central CLI for ~/.bin module & tool management
+#
+# Subcommands:
+#   ls                  list all modules, ✔ enabled / ✘ disabled
+#   enable <name>       symlink module into enabled/
+#   disable <name>      remove the symlink
+#   reload              re-source enabled modules in current shell (use: `. <(bx reload-cmd)` or eval)
+#   edit <name>         open module in $EDITOR; reload on save
+#   new <name> [--tool] scaffold a new module (or tool with --tool)
+#   doctor              health check
+#   run <tool>          execute a tools/ script
+#   tools               list available tools
+#   install             idempotently wire ~/.bashrc to source init.sh
+#   help                show this help
+
+set -u
+
+BX_HOME="${BX_HOME:-$HOME/.bin}"
+BX_LIB="$BX_HOME/lib"
+BX_MODULES="$BX_HOME/modules"
+BX_ENABLED="$BX_HOME/enabled"
+BX_TOOLS="$BX_HOME/tools"
+
+# shellcheck source=lib/color.sh
+[[ -f "$BX_LIB/color.sh" ]] && . "$BX_LIB/color.sh" || {
+    BX_C_RESET= BX_C_BOLD= BX_C_DIM= BX_C_RED= BX_C_GREEN= BX_C_YELLOW=
+    BX_C_BLUE= BX_C_MAGENTA= BX_C_CYAN= BX_C_GRAY=
+}
+# shellcheck source=lib/log.sh
+[[ -f "$BX_LIB/log.sh" ]] && . "$BX_LIB/log.sh" || {
+    bx_info()  { echo "→ $*" >&2; }
+    bx_ok()    { echo "✔ $*" >&2; }
+    bx_warn()  { echo "⚠ $*" >&2; }
+    bx_err()   { echo "✘ $*" >&2; }
+    bx_dim()   { echo "$*" >&2; }
+    bx_kv()    { printf '%-18s %s\n' "$1" "$2" >&2; }
+}
+
+# ── Helpers ──────────────────────────────────────────────────────
+
+# Resolve a user-given <name> to a module file in modules/.
+# Accepts: "docker" → matches 50-docker.sh; "50-docker" → matches 50-docker.sh;
+#          "50-docker.sh" → matches verbatim.
+_bx_resolve_module() {
+    local query=$1 hit hits=()
+    [[ -z "$query" ]] && return 1
+    shopt -s nullglob
+    for f in "$BX_MODULES"/*.sh; do
+        local base=${f##*/} name=${f##*/}
+        name=${name%.sh}              # strip .sh
+        local stripped=${name#[0-9][0-9]-}   # strip "NN-" prefix
+        if [[ "$base" == "$query" || "$name" == "$query" || "$stripped" == "$query" ]]; then
+            hits+=("$f")
+        fi
+    done
+    shopt -u nullglob
+    if (( ${#hits[@]} == 0 )); then
+        return 1
+    elif (( ${#hits[@]} > 1 )); then
+        bx_err "ambiguous module name '$query' matches: ${hits[*]##*/}"
+        return 2
+    fi
+    printf '%s\n' "${hits[0]}"
+}
+
+_bx_is_enabled() {
+    local module_path=$1 name
+    name=$(basename "$module_path")
+    [[ -L "$BX_ENABLED/$name" ]]
+}
+
+# Resolve a tool name to tools/<name>.sh (with or without .sh suffix).
+_bx_resolve_tool() {
+    local query=$1
+    [[ -z "$query" ]] && return 1
+    if [[ -f "$BX_TOOLS/$query" ]]; then
+        printf '%s\n' "$BX_TOOLS/$query"; return 0
+    fi
+    if [[ -f "$BX_TOOLS/$query.sh" ]]; then
+        printf '%s\n' "$BX_TOOLS/$query.sh"; return 0
+    fi
+    return 1
+}
+
+# ── Subcommands ──────────────────────────────────────────────────
+
+cmd_help() {
+    cat <<'EOF'
+bx — central CLI for ~/.bin module & tool management
+
+USAGE
+    bx                           short status
+    bx ls                        list modules (✔ enabled / ✘ disabled)
+    bx enable <name>             symlink module into enabled/
+    bx disable <name>            remove the symlink
+    bx reload                    re-source enabled modules (prints cmd to eval)
+    bx edit <name>               open module in $EDITOR; reload on save
+    bx new <name> [--tool]       scaffold a new module (or tool with --tool)
+    bx doctor                    health check
+    bx run <tool>                execute a tools/ script
+    bx tools                     list available tools
+    bx install                   idempotently wire ~/.bashrc to source init.sh
+    bx help                      show this help
+
+NAMES
+    Module names accept either the short form ("docker") or the full filename
+    ("50-docker.sh"). The CLI resolves both.
+
+EOF
+}
+
+cmd_status() {
+    bx_kv "version:"    "${BX_VERSION:-not loaded}"
+    bx_kv "home:"       "$BX_HOME"
+    if [[ -n "${BX_VERSION:-}" ]]; then
+        bx_kv "loaded:"     "${BX_MODULES_LOADED:-0} module(s)"
+        if [[ -n "${BX_MODULES_FAILED:-}" ]]; then
+            bx_kv "failed:"     "${BX_C_YELLOW}${BX_MODULES_FAILED}${BX_C_RESET}"
+        fi
+    else
+        bx_warn "init.sh has not been sourced into this shell — run \`. ~/.bin/init.sh\`"
+    fi
+}
+
+cmd_ls() {
+    local any=0
+    printf '%s%-26s %s%s\n' "${BX_C_GRAY}" "MODULE" "STATE" "${BX_C_RESET}"
+    shopt -s nullglob
+    for f in "$BX_MODULES"/*.sh; do
+        any=1
+        local name=${f##*/}
+        local mark
+        if _bx_is_enabled "$f"; then
+            mark="${BX_C_GREEN}✔ enabled${BX_C_RESET}"
+        else
+            mark="${BX_C_GRAY}✘ disabled${BX_C_RESET}"
+        fi
+        printf '%-26s %s\n' "$name" "$mark"
+    done
+    shopt -u nullglob
+    (( any == 0 )) && bx_warn "no modules in $BX_MODULES"
+    return 0
+}
+
+cmd_enable() {
+    local query=${1:-}
+    if [[ -z "$query" ]]; then bx_err "usage: bx enable <name>"; return 2; fi
+    local target
+    target=$(_bx_resolve_module "$query") || { bx_err "no module matches '$query'"; return 1; }
+    local name=${target##*/}
+    if _bx_is_enabled "$target"; then
+        bx_dim "already enabled: $name"
+        return 0
+    fi
+    ln -s "../modules/$name" "$BX_ENABLED/$name"
+    bx_ok "enabled $name  ${BX_C_GRAY}(takes effect in new shells; \`bx reload\` to apply here)${BX_C_RESET}"
+}
+
+cmd_disable() {
+    local query=${1:-}
+    if [[ -z "$query" ]]; then bx_err "usage: bx disable <name>"; return 2; fi
+    local target
+    target=$(_bx_resolve_module "$query") || { bx_err "no module matches '$query'"; return 1; }
+    local name=${target##*/}
+    if ! _bx_is_enabled "$target"; then
+        bx_dim "already disabled: $name"
+        return 0
+    fi
+    rm -f "$BX_ENABLED/$name"
+    bx_ok "disabled $name  ${BX_C_GRAY}(takes effect in new shells)${BX_C_RESET}"
+}
+
+cmd_reload() {
+    # We can't re-source the caller's interactive shell from a subprocess.
+    # Instead, print the eval-able command for the user (or for the bx
+    # function shim defined in init.sh).
+    if [[ -t 1 ]]; then
+        bx_info "to reload THIS shell, run:"
+        printf '\n    unset BX_VERSION BX_MOTD_SHOWN && . ~/.bin/init.sh\n\n' >&2
+        bx_dim "tip: define a shell alias  alias bxr='unset BX_VERSION BX_MOTD_SHOWN && . ~/.bin/init.sh'"
+    else
+        # Caller piped us — emit the commands raw so they can `eval $(bx reload)`.
+        printf 'unset BX_VERSION BX_MOTD_SHOWN; . %s/init.sh\n' "$BX_HOME"
+    fi
+}
+
+cmd_edit() {
+    local query=${1:-}
+    if [[ -z "$query" ]]; then bx_err "usage: bx edit <name>"; return 2; fi
+    local target
+    target=$(_bx_resolve_module "$query") || { bx_err "no module matches '$query'"; return 1; }
+    local editor=${EDITOR:-vim}
+    local before after
+    before=$(stat -c '%Y' "$target" 2>/dev/null || echo 0)
+    "$editor" "$target"
+    after=$(stat -c '%Y' "$target" 2>/dev/null || echo 0)
+    if [[ "$before" != "$after" ]]; then
+        bx_ok "$(basename "$target") changed — run \`bx reload\` (or open a new shell)"
+    else
+        bx_dim "no changes"
+    fi
+}
+
+cmd_new() {
+    local name=${1:-} kind=module
+    shift || true
+    while (( $# > 0 )); do
+        case $1 in
+            --tool) kind=tool ;;
+            *) bx_err "unknown flag: $1"; return 2 ;;
+        esac
+        shift
+    done
+    if [[ -z "$name" ]]; then bx_err "usage: bx new <name> [--tool]"; return 2; fi
+    if [[ ! "$name" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+        bx_err "name must be lowercase, start with a letter, contain only [a-z0-9_-]"
+        return 1
+    fi
+
+    if [[ "$kind" == tool ]]; then
+        local path="$BX_TOOLS/$name.sh"
+        if [[ -e "$path" ]]; then bx_err "$path already exists"; return 1; fi
+        cat > "$path" <<TOOL_EOF
+#!/usr/bin/env bash
+# $name — one-shot tool. Run via: bx run $name
+set -euo pipefail
+
+main() {
+    echo "TODO: implement $name"
+}
+
+main "\$@"
+TOOL_EOF
+        chmod +x "$path"
+        bx_ok "created $path"
+        bx_dim "run it with:  bx run $name"
+        return 0
+    fi
+
+    # module — find next free NN- prefix in the 40-49 range by default
+    local prefix=45
+    while [[ -e "$BX_MODULES/${prefix}-${name}.sh" ]] || \
+          compgen -G "$BX_MODULES/${prefix}-*.sh" >/dev/null; do
+        prefix=$(( prefix + 1 ))
+        (( prefix > 89 )) && { bx_err "no free prefix in 40-89 range"; return 1; }
+    done
+    local path="$BX_MODULES/${prefix}-${name}.sh"
+    cat > "$path" <<MOD_EOF
+# ${prefix}-${name}.sh — bx module
+# Sourced by ~/.bin/init.sh into every interactive bash.
+# Enabled via:  bx enable $name
+# Edit via:     bx edit $name
+
+[[ -n "\${_BX_MOD_${name//-/_}_LOADED:-}" ]] && return 0
+_BX_MOD_${name//-/_}_LOADED=1
+
+# TODO: define your aliases / functions / exports below.
+# Example:
+#   alias hi='echo hello from $name'
+#   ${name}-greet() { echo "hi from \$USER"; }
+MOD_EOF
+    bx_ok "created $path"
+    bx_dim "next:   bx enable $name  &&  bx reload"
+}
+
+cmd_doctor() {
+    local issues=0
+
+    bx_info "bx health check"
+    echo >&2
+
+    # 1. init.sh sourced?
+    if [[ -n "${BX_VERSION:-}" ]]; then
+        bx_ok "init.sh loaded (v$BX_VERSION)"
+    else
+        bx_err "init.sh NOT loaded in this shell — \`. ~/.bin/init.sh\`"
+        issues=$(( issues + 1 ))
+    fi
+
+    # 2. ~/.bashrc hook — accept both tilde-form and expanded path
+    if grep -Eq "(\\\$HOME|~|$HOME)/\.bin/init\.sh" "$HOME/.bashrc" 2>/dev/null; then
+        bx_ok "~/.bashrc sources init.sh"
+    else
+        bx_err "~/.bashrc is missing the source line — run \`bx install\`"
+        issues=$(( issues + 1 ))
+    fi
+
+    # 3. Required dirs
+    for d in modules enabled tools lib; do
+        if [[ -d "$BX_HOME/$d" ]]; then
+            bx_ok "directory: $d/"
+        else
+            bx_err "missing directory: $d/"
+            issues=$(( issues + 1 ))
+        fi
+    done
+
+    # 4. Broken symlinks in enabled/
+    local broken=0
+    shopt -s nullglob
+    for f in "$BX_ENABLED"/*; do
+        if [[ -L "$f" && ! -e "$f" ]]; then
+            bx_err "broken symlink: $f → $(readlink "$f")"
+            broken=$(( broken + 1 ))
+            issues=$(( issues + 1 ))
+        fi
+    done
+    shopt -u nullglob
+    (( broken == 0 )) && bx_ok "no broken symlinks in enabled/"
+
+    # 5. Modules failed to load this shell
+    if [[ -n "${BX_MODULES_FAILED:-}" ]]; then
+        bx_err "modules failed at last load: ${BX_MODULES_FAILED}"
+        issues=$(( issues + 1 ))
+    fi
+
+    # 6. PATH contains BX_HOME?
+    case ":$PATH:" in
+        *":$BX_HOME:"*) bx_ok "$BX_HOME is on \$PATH" ;;
+        *) bx_warn "$BX_HOME is NOT on \$PATH (init.sh adds it on next reload)"
+           issues=$(( issues + 1 )) ;;
+    esac
+
+    echo >&2
+    if (( issues == 0 )); then
+        bx_ok "all checks passed"
+        return 0
+    else
+        bx_warn "$issues issue(s) found"
+        return 1
+    fi
+}
+
+cmd_run() {
+    local query=${1:-}
+    if [[ -z "$query" ]]; then bx_err "usage: bx run <tool>"; return 2; fi
+    shift
+    local target
+    target=$(_bx_resolve_tool "$query") || { bx_err "no tool matches '$query' (try \`bx tools\`)"; return 1; }
+    bx_info "running $target"
+    exec bash "$target" "$@"
+}
+
+cmd_tools() {
+    printf '%s%-26s %s%s\n' "${BX_C_GRAY}" "TOOL" "PURPOSE" "${BX_C_RESET}"
+    shopt -s nullglob
+    local any=0
+    for f in "$BX_TOOLS"/*.sh; do
+        any=1
+        local name=${f##*/}
+        name=${name%.sh}
+        # Tools declare their purpose with `# bx-purpose: <text>` near the top.
+        local purpose
+        purpose=$(awk '/^# bx-purpose:/ {sub(/^# bx-purpose:[ \t]*/, ""); print; exit}' "$f")
+        printf '%-26s %s\n' "$name" "${purpose:-—}"
+    done
+    shopt -u nullglob
+    (( any == 0 )) && bx_warn "no tools in $BX_TOOLS"
+    return 0
+}
+
+cmd_install() {
+    local line=". $BX_HOME/init.sh"
+    if grep -Fq "$line" "$HOME/.bashrc" 2>/dev/null; then
+        bx_dim "~/.bashrc already sources init.sh — nothing to do"
+        return 0
+    fi
+    # Remove any old dotFiles/bashrc reference first.
+    if grep -Fq "$BX_HOME/dotFiles/bashrc" "$HOME/.bashrc" 2>/dev/null; then
+        sed -i "\|$BX_HOME/dotFiles/bashrc|d" "$HOME/.bashrc"
+        bx_dim "removed old dotFiles/bashrc reference"
+    fi
+    {
+        echo ""
+        echo "# bx — central shell-customization system"
+        echo "$line"
+    } >> "$HOME/.bashrc"
+    bx_ok "added source line to ~/.bashrc"
+    bx_dim "open a new terminal or run:  $line"
+}
+
+# ── Dispatch ─────────────────────────────────────────────────────
+
+cmd=${1:-status}
+shift 2>/dev/null || true
+
+case $cmd in
+    ''|status)             cmd_status "$@" ;;
+    ls|list)               cmd_ls "$@" ;;
+    enable|on)             cmd_enable "$@" ;;
+    disable|off)           cmd_disable "$@" ;;
+    reload)                cmd_reload "$@" ;;
+    edit)                  cmd_edit "$@" ;;
+    new)                   cmd_new "$@" ;;
+    doctor|check|health)   cmd_doctor "$@" ;;
+    run|exec)              cmd_run "$@" ;;
+    tools)                 cmd_tools "$@" ;;
+    install)               cmd_install "$@" ;;
+    help|-h|--help)        cmd_help ;;
+    *)
+        bx_err "unknown command: $cmd"
+        echo >&2
+        cmd_help
+        exit 2
+        ;;
+esac

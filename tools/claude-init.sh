@@ -1,4 +1,5 @@
 #!/bin/bash
+# bx-purpose: install Claude Code CLI + status line config
 #
 # claude-init.sh
 # ─────────────────────────────────────────────────────────────────────────────
