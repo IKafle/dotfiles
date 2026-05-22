@@ -43,9 +43,10 @@ or wire it into `~/.bashrc` directly, you have broken the contract.
 11. **Keep this CLAUDE.md accurate.** If you introduce any architectural
     concept this file doesn't already explain — a new top-level folder,
     a new file-type convention, a new metadata field, a new `bx`
-    subcommand, a new env var the loader exports, a new lifecycle stage
-    — you MUST update CLAUDE.md in the same change. See [Keeping this
-    document accurate](#keeping-this-document-accurate) for the test.
+    subcommand, a new plugin kind, a new env var the loader exports, a
+    new lifecycle stage — you MUST update CLAUDE.md in the same change.
+    See [Keeping this document accurate](#keeping-this-document-accurate)
+    for the test.
 
 ---
 
@@ -73,12 +74,15 @@ or wire it into `~/.bashrc` directly, you have broken the contract.
 │   ├── docker-init.sh
 │   ├── docker-desktop-init.sh
 │   └── vault-init.sh
+├── plugins/            customizations that LIVE OUTSIDE ~/.bin/
+│   └── geekbar.argos.sh       <name>.<kind>.sh — source of truth in git
+├── enabled-plugins/    symlinks → plugins/ — like enabled/ but for plugins
 ├── completions/        bash completion scripts (auto-sourced by 60-prompt.sh)
 ├── claude/             config consumed by Claude Code (statusline.py)
 └── docs/               READMEs, notes, references
 ```
 
-**Sourced vs runnable — the key distinction**
+**Sourced vs runnable vs externally-mounted — three categories**
 
 - `modules/*.sh` are **sourced** into every interactive bash via
   `init.sh`. They define functions, aliases, env vars. They must not
@@ -86,6 +90,12 @@ or wire it into `~/.bashrc` directly, you have broken the contract.
 - `tools/*.sh` are **executed** on demand via `bx run <name>` or
   `bash ~/.bin/tools/<name>.sh`. They install software, bootstrap
   workspaces, perform one-time setup.
+- `plugins/<name>.<kind>.sh` are **mounted into an external location**
+  (a tool-mandated path outside `~/.bin/`) via symlink. The source of
+  truth stays in `plugins/`, version-controlled with the rest of your
+  dotfiles. Examples: Argos panel scripts (`~/.config/argos/`), GNOME
+  extensions, systemd user units. Managed with `bx plugin ls/enable/
+  disable/new/doctor`.
 
 **The symlink farm**
 
@@ -152,6 +162,43 @@ print clear progress. They MUST start with:
 Drop the completion script into `~/.bin/completions/`. The `60-prompt.sh`
 module sources every file in that directory automatically. No
 registration needed.
+
+### Adding a plugin (customization that lives outside ~/.bin/)
+
+Plugins are for things some other tool insists on finding at a specific
+path (Argos at `~/.config/argos/`, GNOME extensions at
+`~/.local/share/gnome-shell/extensions/`, systemd user units at
+`~/.config/systemd/user/`). The source-of-truth file lives in
+`~/.bin/plugins/<name>.<kind>.sh`; `bx plugin enable` creates a symlink
+at the external location.
+
+```bash
+bx plugin new mywidget --kind argos      # scaffolds plugins/mywidget.argos.sh
+$EDITOR ~/.bin/plugins/mywidget.argos.sh # implement
+bx plugin enable mywidget                # symlinks into ~/.config/argos/
+bx plugin doctor                         # verify external symlinks healthy
+```
+
+Plugin files MUST declare three header fields:
+```bash
+# bx-purpose: <one-liner>
+# bx-plugin-kind: argos
+# bx-plugin-target: ~/.config/argos/mywidget.1s+.sh
+```
+
+`bx-plugin-target` is the EXACT path (including any tool-specific filename
+encoding like Argos's `.1s+.sh` refresh-rate suffix). `bx plugin enable`
+creates `target → source` as a symlink; disable removes the target only
+if it still points at our source.
+
+**Supported plugin kinds**: `argos` (chmod-based via symlink, since Argos
+just runs anything executable in its dir).
+
+**Adding a new kind**: edit `_bx_plugin_apply` in `~/.bin/bx` to add a
+case for the new kind, then document it in this file. Likely candidates:
+- `gnome-extension`: enable/disable via `gnome-extensions enable/disable`
+- `systemd-user-unit`: link into `~/.config/systemd/user/` and `systemctl --user enable/disable`
+- `autostart`: link `.desktop` file into `~/.config/autostart/`
 
 ---
 
@@ -279,6 +326,7 @@ Failing any of these means more work to do; don't stop.
 | Add a one-shot installer                      | `tools/name.sh`                    | (auto, via `bx run`) |
 | Add a bash completion script                  | `completions/<cmd>`                | (auto)            |
 | Add a shared helper used by multiple modules  | `lib/<name>.sh`                    | source from init.sh or module |
+| Manage an Argos / GNOME-ext / systemd-unit    | `plugins/<name>.<kind>.sh`         | `bx plugin enable <name>` |
 | Document a workflow                           | `docs/<topic>.md`                  | link from README  |
 | Configure an external tool (e.g. Claude Code) | `claude/<file>` or similar         | tool reads it directly |
 

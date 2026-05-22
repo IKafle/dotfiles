@@ -21,6 +21,8 @@ BX_LIB="$BX_HOME/lib"
 BX_MODULES="$BX_HOME/modules"
 BX_ENABLED="$BX_HOME/enabled"
 BX_TOOLS="$BX_HOME/tools"
+BX_PLUGINS="$BX_HOME/plugins"
+BX_ENABLED_PLUGINS="$BX_HOME/enabled-plugins"
 
 # shellcheck source=lib/color.sh
 [[ -f "$BX_LIB/color.sh" ]] && . "$BX_LIB/color.sh" || {
@@ -83,6 +85,62 @@ _bx_resolve_tool() {
     return 1
 }
 
+# Resolve a plugin name to plugins/<name>.<kind>.sh.
+_bx_resolve_plugin() {
+    local query=$1 hits=()
+    [[ -z "$query" ]] && return 1
+    shopt -s nullglob
+    for f in "$BX_PLUGINS"/*.sh; do
+        local base=${f##*/}                  # e.g. geekbar.argos.sh
+        local stem=${base%.sh}               # e.g. geekbar.argos
+        local name=${stem%.*}                # e.g. geekbar
+        if [[ "$base" == "$query" || "$stem" == "$query" || "$name" == "$query" ]]; then
+            hits+=("$f")
+        fi
+    done
+    shopt -u nullglob
+    if (( ${#hits[@]} == 0 )); then
+        return 1
+    elif (( ${#hits[@]} > 1 )); then
+        bx_err "ambiguous plugin name '$query' matches: ${hits[*]##*/}"
+        return 2
+    fi
+    printf '%s\n' "${hits[0]}"
+}
+
+# Read a `# bx-plugin-<key>:` line from a plugin file.
+_bx_plugin_meta() {
+    local path=$1 key=$2
+    awk -v k="$key" '
+        $1 == "#" && $2 == ("bx-plugin-" k ":") {
+            for (i=3; i<=NF; i++) printf "%s%s", (i>3?" ":""), $i
+            print ""
+            exit
+        }
+    ' "$path"
+}
+
+# Expand ~ and $HOME in a path string.
+_bx_expand_path() {
+    local p=$1
+    p=${p/#\~/$HOME}
+    eval echo "$p"   # let $HOME and friends resolve
+}
+
+# Get the short plugin name from a source file path.
+_bx_plugin_name() {
+    local f=$1 base=${1##*/}
+    local stem=${base%.sh}
+    printf '%s\n' "${stem%.*}"
+}
+
+# Is this plugin currently enabled?
+_bx_plugin_is_enabled() {
+    local plugin_path=$1 name
+    name=$(_bx_plugin_name "$plugin_path")
+    [[ -L "$BX_ENABLED_PLUGINS/$name" ]]
+}
+
 # ── Subcommands ──────────────────────────────────────────────────
 
 cmd_help() {
@@ -124,6 +182,12 @@ USAGE
 
     bx tools                     list available tools
       → bx tools
+
+    bx plugin <verb>             manage external customizations (Argos, etc.)
+      → bx plugin ls
+      → bx plugin enable geekbar
+      → bx plugin disable geekbar
+      → bx plugin help            # full plugin subcommand reference
 
     bx install                   idempotently add the source line to ~/.bashrc
       → bx install
@@ -422,6 +486,212 @@ cmd_install() {
     bx_dim "open a new terminal or run:  $line"
 }
 
+# ── Plugin subcommands ──────────────────────────────────────────
+# Plugins manage customizations that live OUTSIDE ~/.bin/ (Argos panel
+# scripts, GNOME extensions, systemd user units, autostart files, etc).
+# Each plugin lives at ~/.bin/plugins/<name>.<kind>.sh with header
+# metadata declaring its kind and target path. Bx symlinks the source
+# into the tool-mandated external location when enabled.
+
+# Per-kind dispatcher: when adding a new kind, add a case here and
+# document it in CLAUDE.md.
+_bx_plugin_apply() {
+    local action=$1 src=$2 kind=$3 target=$4
+    case $kind in
+        argos)
+            case $action in
+                enable)
+                    mkdir -p "$(dirname "$target")"
+                    ln -sf "$src" "$target"
+                    ;;
+                disable)
+                    # Only remove if it points at OUR source (don't nuke
+                    # someone else's file at that path).
+                    if [[ -L "$target" && "$(readlink -f "$target")" == "$(readlink -f "$src")" ]]; then
+                        rm "$target"
+                    elif [[ -e "$target" ]]; then
+                        bx_warn "external target $target exists but is not our symlink — leaving alone"
+                        return 1
+                    fi
+                    ;;
+            esac
+            ;;
+        *)
+            bx_err "unknown plugin kind: $kind (add a handler in _bx_plugin_apply)"
+            return 1
+            ;;
+    esac
+}
+
+cmd_plugin() {
+    local sub=${1:-ls}
+    shift 2>/dev/null || true
+    case $sub in
+        ls|list)         cmd_plugin_ls "$@" ;;
+        enable|on)       cmd_plugin_enable "$@" ;;
+        disable|off)     cmd_plugin_disable "$@" ;;
+        new)             cmd_plugin_new "$@" ;;
+        doctor|check)    cmd_plugin_doctor "$@" ;;
+        help|-h|--help)
+            cat <<'EOF'
+bx plugin — manage customizations that live OUTSIDE ~/.bin/
+
+USAGE
+    bx plugin ls                       list available plugins (✔/✘)
+      → bx plugin ls
+
+    bx plugin enable <name>            symlink source into external target
+      → bx plugin enable geekbar
+
+    bx plugin disable <name>           remove external symlink (keeps source)
+      → bx plugin disable geekbar
+
+    bx plugin new <name> --kind <k>    scaffold a new plugin
+      → bx plugin new mywidget --kind argos
+
+    bx plugin doctor                   verify each enabled plugin's symlink
+
+SUPPORTED KINDS
+    argos       GNOME panel scripts under ~/.config/argos/
+
+To add a new kind, edit `_bx_plugin_apply` in ~/.bin/bx and document it
+in CLAUDE.md.
+EOF
+            ;;
+        *) bx_err "unknown plugin subcommand: $sub"; return 2 ;;
+    esac
+}
+
+cmd_plugin_ls() {
+    local any=0
+    printf '%s%-22s %-12s %-8s %s%s\n' "${BX_C_GRAY}" "PLUGIN" "KIND" "STATE" "TARGET" "${BX_C_RESET}"
+    shopt -s nullglob
+    for f in "$BX_PLUGINS"/*.sh; do
+        any=1
+        local name kind target mark
+        name=$(_bx_plugin_name "$f")
+        kind=$(_bx_plugin_meta "$f" kind)
+        target=$(_bx_plugin_meta "$f" target)
+        if _bx_plugin_is_enabled "$f"; then
+            mark="${BX_C_GREEN}✔${BX_C_RESET}"
+        else
+            mark="${BX_C_GRAY}✘${BX_C_RESET}"
+        fi
+        printf '%-22s %-12s %s %s\n' "$name" "${kind:-?}" "$mark      " "${target:-—}"
+    done
+    shopt -u nullglob
+    (( any == 0 )) && bx_warn "no plugins in $BX_PLUGINS"
+    return 0
+}
+
+cmd_plugin_enable() {
+    local query=${1:-}
+    if [[ -z "$query" ]]; then bx_err "usage: bx plugin enable <name>"; return 2; fi
+    local src
+    src=$(_bx_resolve_plugin "$query") || { bx_err "no plugin matches '$query'"; return 1; }
+    local name kind target target_exp
+    name=$(_bx_plugin_name "$src")
+    kind=$(_bx_plugin_meta "$src" kind)
+    target=$(_bx_plugin_meta "$src" target)
+    if [[ -z "$kind" || -z "$target" ]]; then
+        bx_err "$name is missing bx-plugin-kind or bx-plugin-target metadata"
+        return 1
+    fi
+    target_exp=$(_bx_expand_path "$target")
+    if _bx_plugin_is_enabled "$src"; then
+        bx_dim "already enabled: $name"
+        # But still ensure the external symlink is healthy.
+    fi
+    _bx_plugin_apply enable "$src" "$kind" "$target_exp" || return $?
+    ln -sf "../plugins/$(basename "$src")" "$BX_ENABLED_PLUGINS/$name"
+    bx_ok "enabled plugin: $name  ${BX_C_GRAY}($kind → $target)${BX_C_RESET}"
+}
+
+cmd_plugin_disable() {
+    local query=${1:-}
+    if [[ -z "$query" ]]; then bx_err "usage: bx plugin disable <name>"; return 2; fi
+    local src
+    src=$(_bx_resolve_plugin "$query") || { bx_err "no plugin matches '$query'"; return 1; }
+    local name kind target target_exp
+    name=$(_bx_plugin_name "$src")
+    kind=$(_bx_plugin_meta "$src" kind)
+    target=$(_bx_plugin_meta "$src" target)
+    target_exp=$(_bx_expand_path "$target")
+    _bx_plugin_apply disable "$src" "$kind" "$target_exp"
+    rm -f "$BX_ENABLED_PLUGINS/$name"
+    bx_ok "disabled plugin: $name  ${BX_C_GRAY}(source kept at $src)${BX_C_RESET}"
+    bx_dim "tip: restart GNOME Shell (Alt+F2 → r on X11; logout/in on Wayland) to apply visually"
+}
+
+cmd_plugin_new() {
+    local name=${1:-} kind=
+    shift || true
+    while (( $# > 0 )); do
+        case $1 in
+            --kind) kind=${2:-}; shift 2 || break ;;
+            *) bx_err "unknown flag: $1"; return 2 ;;
+        esac
+    done
+    if [[ -z "$name" || -z "$kind" ]]; then
+        bx_err "usage: bx plugin new <name> --kind <argos>"
+        return 2
+    fi
+    if [[ ! "$name" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+        bx_err "name must be lowercase, start with a letter, contain only [a-z0-9_-]"; return 1
+    fi
+    local path="$BX_PLUGINS/$name.$kind.sh"
+    if [[ -e "$path" ]]; then bx_err "$path already exists"; return 1; fi
+    local default_target
+    case $kind in
+        argos) default_target="~/.config/argos/$name.1s+.sh" ;;
+        *)     default_target="~/PATH/TO/EXTERNAL/$name" ;;
+    esac
+    cat > "$path" <<PLUGIN_EOF
+#!/usr/bin/env bash
+# bx-purpose: TODO one-line description
+# bx-plugin-kind: $kind
+# bx-plugin-target: $default_target
+
+# Implement your plugin below.
+echo "$name :: hello"
+PLUGIN_EOF
+    chmod +x "$path"
+    bx_ok "created $path"
+    bx_dim "next:   \$EDITOR $path && bx plugin enable $name"
+}
+
+cmd_plugin_doctor() {
+    local issues=0
+    shopt -s nullglob
+    for f in "$BX_ENABLED_PLUGINS"/*; do
+        local name=${f##*/}
+        if [[ ! -e "$f" ]]; then
+            bx_err "enabled-plugins/$name is a broken symlink"
+            issues=$(( issues + 1 ))
+            continue
+        fi
+        local src target target_exp
+        src=$(readlink -f "$f")
+        target=$(_bx_plugin_meta "$src" target)
+        target_exp=$(_bx_expand_path "$target")
+        if [[ ! -L "$target_exp" ]]; then
+            bx_err "$name: external location $target_exp is missing (re-enable?)"
+            issues=$(( issues + 1 ))
+        elif [[ "$(readlink -f "$target_exp")" != "$src" ]]; then
+            bx_err "$name: external location $target_exp points elsewhere"
+            issues=$(( issues + 1 ))
+        else
+            bx_ok "$name: $target_exp → $src"
+        fi
+    done
+    shopt -u nullglob
+    if (( issues == 0 )); then
+        bx_ok "all plugins healthy"
+        return 0
+    fi
+    return 1
+}
+
 # ── Dispatch ─────────────────────────────────────────────────────
 
 cmd=${1:-status}
@@ -439,6 +709,7 @@ case $cmd in
     run|exec)              cmd_run "$@" ;;
     tools)                 cmd_tools "$@" ;;
     install)               cmd_install "$@" ;;
+    plugin|plugins)        cmd_plugin "$@" ;;
     help|-h|--help)        cmd_help ;;
     *)
         bx_err "unknown command: $cmd"
