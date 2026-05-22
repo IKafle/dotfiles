@@ -91,21 +91,63 @@ bx — central CLI for ~/.bin module & tool management
 
 USAGE
     bx                           short status
+      → bx
+
     bx ls                        list modules (✔ enabled / ✘ disabled)
+      → bx ls
+
     bx enable <name>             symlink module into enabled/
+      → bx enable docker
+      → bx enable 50-docker.sh
+
     bx disable <name>            remove the symlink
-    bx reload                    re-source enabled modules (prints cmd to eval)
-    bx edit <name>               open module in $EDITOR; reload on save
-    bx new <name> [--tool]       scaffold a new module (or tool with --tool)
+      → bx disable holidays
+
+    bx reload                    re-source enabled modules in current shell
+      → eval "$(bx reload)"               # apply changes here
+      → bx reload                         # shows the command to run
+
+    bx edit <name>               open module in $EDITOR; reload hint on save
+      → bx edit aliases
+      → bx edit 30-functions.sh
+
+    bx new <name> [--tool]       scaffold a new module from template
+      → bx new my-helper                  # creates modules/45-my-helper.sh
+      → bx new docker-cleanup --tool      # creates tools/docker-cleanup.sh
+
     bx doctor                    health check
-    bx run <tool>                execute a tools/ script
+      → bx doctor
+
+    bx run <tool>                execute a script in tools/
+      → bx run docker-init
+      → bx run vault-init -- --dry-run    # extra args after --
+
     bx tools                     list available tools
-    bx install                   idempotently wire ~/.bashrc to source init.sh
+      → bx tools
+
+    bx install                   idempotently add the source line to ~/.bashrc
+      → bx install
+
     bx help                      show this help
+      → bx help
 
 NAMES
     Module names accept either the short form ("docker") or the full filename
-    ("50-docker.sh"). The CLI resolves both.
+    ("50-docker.sh"). The CLI resolves both. Tools accept name with or without
+    the .sh suffix.
+
+TYPICAL FLOWS
+    First-time setup on a new machine
+      → bx install && exec bash
+
+    Author a new automation
+      → bx new my-helper
+      → bx edit my-helper
+      → eval "$(bx reload)"
+
+    Toggle a module off temporarily
+      → bx disable holidays           # next shell won't load it
+      → bx enable holidays            # turn it back on
 
 EOF
 }
