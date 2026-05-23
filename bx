@@ -178,85 +178,200 @@ _bx_plugin_is_enabled() {
 
 # ── Subcommands ──────────────────────────────────────────────────
 
-cmd_help() {
+_bx_help_summary() {
     cat <<'EOF'
-bx — central CLI for ~/.bin module & tool management
+bx — manage shell customizations in ~/.bin
 
-USAGE
-    bx                           short status
-      → bx
+MODULES — sourced into every interactive shell
+  ls               list modules (✔ enabled / ✘ disabled)
+  enable <name>    turn a module on
+  disable <name>   turn a module off
+  edit <name>      open in $EDITOR
+  read <name>      print contents to stdout
+  new <name>       scaffold a new module
 
-    bx ls                        list modules (✔ enabled / ✘ disabled)
-      → bx ls
+TOOLS — executed on demand
+  tools            list tools
+  run <tool>       execute a tool
+  new <name> --tool  scaffold a new tool
 
-    bx enable <name>             symlink module into enabled/
-      → bx enable docker
-      → bx enable 50-docker.sh
+PLUGINS — live OUTSIDE ~/.bin (Argos, etc.)
+  plugin ls        list plugins
+  plugin enable    symlink into external target
+  plugin disable   remove external symlink
+  plugin help      full plugin reference
 
-    bx disable <name>            remove the symlink
-      → bx disable holidays
+SYSTEM
+  status           version + load summary + resource counts (default)
+  reload           re-source modules in current shell
+  doctor           health check
+  selftest         regression check
+  install          wire into ~/.bashrc
 
-    bx reload                    re-source enabled modules in current shell
-      → eval "$(bx reload)"               # apply changes here
-      → bx reload                         # shows the command to run
-
-    bx edit <name>               open module in $EDITOR; reload hint on save
-      → bx edit aliases
-      → bx edit 30-functions.sh
-
-    bx read <name>               print module contents to stdout (alias: cat, show)
-      → bx read aliases
-      → bx read 30-functions.sh
-      → bx cat docker | grep -i context
-
-    bx new <name> [--tool]       scaffold a new module from template
-      → bx new my-helper                  # creates modules/45-my-helper.sh
-      → bx new docker-cleanup --tool      # creates tools/docker-cleanup.sh
-
-    bx doctor                    health check
-      → bx doctor
-
-    bx selftest                  full regression check (load, guards, metadata)
-      → bx selftest
-
-    bx run <tool>                execute a script in tools/
-      → bx run docker-init
-      → bx run vault-init -- --dry-run    # extra args after --
-
-    bx tools                     list available tools
-      → bx tools
-
-    bx plugin <verb>             manage external customizations (Argos, etc.)
-      → bx plugin ls
-      → bx plugin enable geekbar
-      → bx plugin disable geekbar
-      → bx plugin help            # full plugin subcommand reference
-
-    bx install                   idempotently add the source line to ~/.bashrc
-      → bx install
-
-    bx help                      show this help
-      → bx help
-
-NAMES
-    Module names accept either the short form ("docker") or the full filename
-    ("50-docker.sh"). The CLI resolves both. Tools accept name with or without
-    the .sh suffix.
-
-TYPICAL FLOWS
-    First-time setup on a new machine
-      → bx install && exec bash
-
-    Author a new automation
-      → bx new my-helper
-      → bx edit my-helper
-      → eval "$(bx reload)"
-
-    Toggle a module off temporarily
-      → bx disable holidays           # next shell won't load it
-      → bx enable holidays            # turn it back on
-
+Names accept short ("docker") or full ("50-docker.sh") form.
+Run `bx help <command>` for examples (e.g. `bx help enable`).
 EOF
+}
+
+cmd_help() {
+    local topic=${1:-}
+    case $topic in
+        '')
+            _bx_help_summary ;;
+        ls|list)
+            cat <<'EOF'
+bx ls — list modules with their enabled/disabled state
+
+EXAMPLES
+    bx ls
+EOF
+            ;;
+        enable|on)
+            cat <<'EOF'
+bx enable <name> — symlink module into enabled/
+
+EXAMPLES
+    bx enable docker
+    bx enable 50-docker.sh
+EOF
+            ;;
+        disable|off)
+            cat <<'EOF'
+bx disable <name> — remove the symlink (source kept)
+
+EXAMPLES
+    bx disable holidays
+EOF
+            ;;
+        reload)
+            cat <<'EOF'
+bx reload — re-source enabled modules in current shell
+
+EXAMPLES
+    eval "$(bx reload)"     # apply changes here
+    bx reload               # just print the command to run
+EOF
+            ;;
+        edit)
+            cat <<'EOF'
+bx edit <name> — open module in $EDITOR; reload hint on save
+
+EXAMPLES
+    bx edit aliases
+    bx edit 30-functions.sh
+EOF
+            ;;
+        read|cat|show)
+            cat <<'EOF'
+bx read <name> — print module contents to stdout (aliases: cat, show)
+
+EXAMPLES
+    bx read aliases
+    bx read 30-functions.sh
+    bx cat docker | grep -i context
+EOF
+            ;;
+        new)
+            cat <<'EOF'
+bx new <name> [--tool] — scaffold a new module (or tool with --tool)
+
+EXAMPLES
+    bx new my-helper                # creates modules/45-my-helper.sh
+    bx new docker-cleanup --tool    # creates tools/docker-cleanup.sh
+
+TYPICAL FLOW
+    bx new my-helper
+    bx edit my-helper
+    eval "$(bx reload)"
+EOF
+            ;;
+        doctor|check|health)
+            cat <<'EOF'
+bx doctor — health check
+
+EXAMPLES
+    bx doctor
+EOF
+            ;;
+        selftest|test)
+            cat <<'EOF'
+bx selftest — full regression check (load, guards, metadata)
+
+EXAMPLES
+    bx selftest
+EOF
+            ;;
+        run|exec)
+            cat <<'EOF'
+bx run <tool> — execute a script in tools/
+
+EXAMPLES
+    bx run docker-init
+    bx run vault-init -- --dry-run    # extra args after --
+EOF
+            ;;
+        tools)
+            cat <<'EOF'
+bx tools — list available tools
+
+EXAMPLES
+    bx tools
+EOF
+            ;;
+        install)
+            cat <<'EOF'
+bx install — idempotently add the source line to ~/.bashrc
+
+EXAMPLES
+    bx install
+    bx install && exec bash    # first-time setup on a new machine
+EOF
+            ;;
+        status)
+            cat <<'EOF'
+bx status — version, home, load summary, and resource counts
+            (this is the default when you run `bx` with no args)
+
+EXAMPLES
+    bx
+    bx status
+EOF
+            ;;
+        plugin|plugins)
+            cat <<'EOF'
+bx plugin <verb> — manage customizations that live OUTSIDE ~/.bin
+
+VERBS
+    bx plugin ls           list plugins (✔/✘)
+    bx plugin enable <n>   symlink source into external target
+    bx plugin disable <n>  remove external symlink (source kept)
+    bx plugin new <n> --kind <k> [--dir]
+    bx plugin doctor       verify each enabled plugin's symlink
+
+EXAMPLES
+    bx plugin ls
+    bx plugin enable geekbar
+
+See `bx plugin help` for plugin forms (file vs directory) and supported kinds.
+EOF
+            ;;
+        help|-h|--help)
+            cat <<'EOF'
+bx help [<command>] — show help
+
+EXAMPLES
+    bx help              # grouped summary of all commands
+    bx help enable       # detail for a single command
+    bx help plugin       # plugin overview (see also: bx plugin help)
+EOF
+            ;;
+        *)
+            bx_err "no help topic: $topic"
+            echo >&2
+            echo "Run \`bx help\` for the command list." >&2
+            return 2
+            ;;
+    esac
 }
 
 cmd_status() {
@@ -267,6 +382,21 @@ cmd_status() {
         if [[ -n "${BX_MODULES_FAILED:-}" ]]; then
             bx_kv "failed:"     "${BX_C_YELLOW}${BX_MODULES_FAILED}${BX_C_RESET}"
         fi
+        local m_total m_enabled m_disabled t_total p_total p_enabled p_disabled
+        local arr files dirs
+        shopt -s nullglob
+        arr=("$BX_MODULES"/*.sh);          m_total=${#arr[@]}
+        arr=("$BX_ENABLED"/*.sh);          m_enabled=${#arr[@]}
+        m_disabled=$((m_total - m_enabled))
+        arr=("$BX_TOOLS"/*.sh);            t_total=${#arr[@]}
+        files=("$BX_PLUGINS"/*.sh);        dirs=("$BX_PLUGINS"/*/)
+        p_total=$(( ${#files[@]} + ${#dirs[@]} ))
+        arr=("$BX_ENABLED_PLUGINS"/*);     p_enabled=${#arr[@]}
+        p_disabled=$((p_total - p_enabled))
+        shopt -u nullglob
+        bx_kv "modules:"   "${m_enabled} enabled · ${m_disabled} disabled"
+        bx_kv "tools:"     "${t_total} available"
+        bx_kv "plugins:"   "${p_enabled} enabled · ${p_disabled} disabled"
     else
         bx_warn "init.sh has not been sourced into this shell — run \`. ~/.bin/init.sh\`"
     fi
@@ -960,7 +1090,7 @@ case $cmd in
     tools)                 cmd_tools "$@" ;;
     install)               cmd_install "$@" ;;
     plugin|plugins)        cmd_plugin "$@" ;;
-    help|-h|--help)        cmd_help ;;
+    help|-h|--help)        cmd_help "$@" ;;
     *)
         bx_err "unknown command: $cmd"
         echo >&2
