@@ -563,11 +563,6 @@ cmd_install() {
         bx_dim "~/.bashrc already sources init.sh — nothing to do"
         return 0
     fi
-    # Remove any old dotFiles/bashrc reference first.
-    if grep -Fq "$BX_HOME/dotFiles/bashrc" "$HOME/.bashrc" 2>/dev/null; then
-        sed -i "\|$BX_HOME/dotFiles/bashrc|d" "$HOME/.bashrc"
-        bx_dim "removed old dotFiles/bashrc reference"
-    fi
     {
         echo ""
         echo "# bx — central shell-customization system"

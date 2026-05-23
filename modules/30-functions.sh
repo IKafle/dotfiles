@@ -165,10 +165,18 @@ rec -r 44100 -p | sox -p "audio_name-$(date '+%Y-%m-%d').ogg" silence -l 1 00:00
 
 function backup_bashfiles()
 {
-  ARCHIVE="$HOME/bash_dotfiles_$(date +%Y%m%d_%H%M%S).tar.gz";
-  cd ~
-  tar -czvf $ARCHIVE .bash_profile .bashrc .bash_functions .bash_aliases .bash_prompt
-  echo "All backed up in $ARCHIVE";
+  local archive="$HOME/bash_dotfiles_$(date +%Y%m%d_%H%M%S).tar.gz"
+  local candidates=(.bashrc .bash_profile .bash_logout .inputrc .profile)
+  local present=()
+  for f in "${candidates[@]}"; do
+    [[ -f "$HOME/$f" ]] && present+=("$f")
+  done
+  if (( ${#present[@]} == 0 )); then
+    echo "no bash dotfiles to back up"
+    return 1
+  fi
+  ( cd "$HOME" && tar -czvf "$archive" "${present[@]}" )
+  echo "All backed up in $archive"
 }
 
 
