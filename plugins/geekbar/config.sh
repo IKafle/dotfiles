@@ -2,6 +2,14 @@
 # ─────────────────────────────────────────────────────────────
 #  geekbar :: config
 #  Tracked defaults. Edit in-place to tune your bar.
+#
+#  Active-repo signal: the git widget reads
+#  $XDG_CACHE_HOME/geekbar/active_repo, populated by the shell
+#  hook in modules/45-geekbar-track.sh. Enable it with:
+#      bx enable geekbar-track
+#  Until terminals start writing that file, the widget falls
+#  back to a hardcoded conventional-roots scan (see
+#  find_active_repo in lib.sh) — not user-configurable.
 # ─────────────────────────────────────────────────────────────
 
 # BAR_WIDGETS — left-to-right order on the compact panel. Empty list = blank bar.
@@ -67,16 +75,6 @@ COLOR_ACCENT="#89b4fa"
 # Leave empty for auto-detect (picks the default-route interface).
 # Set explicitly if auto-detect picks the wrong one, e.g. "wlp3s0".
 NET_IFACE=""
-
-# ── git repo detection ───────────────────────────────────────
-# Where to look for "the current project" for the git segment.
-# Since Argos runs headless (no shell context), we look at the
-# most recently modified dir under these roots.
-GIT_WATCH_DIRS=(
-    "$HOME/dev"
-    "$HOME/repos"
-    "$HOME/work"
-)
 
 # ── refresh tiers ────────────────────────────────────────────
 # Argos refreshes the whole script on its filename interval (2s).

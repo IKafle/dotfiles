@@ -1,15 +1,30 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
 #  geekbar :: widgets/context
-#  git — Stage 2 still walks GIT_WATCH_DIRS via find_active_repo;
-#  Stage 3 swaps in the shell hook.
+#  git — primary signal is the shell hook in
+#  modules/45-geekbar-track.sh, which writes the active .git
+#  root to $XDG_CACHE_HOME/geekbar/active_repo on every cd.
+#  Cold-boot fallback is find_active_repo() in lib.sh.
 # ─────────────────────────────────────────────────────────────
 
-# Stage 2: cache parsed git status as "branch|ahead|behind|dirty|path".
-# Helper shared by bar and menu so we don't probe git twice.
+# Resolve the active repo. Order:
+#   1. State file written by the shell hook (cheap, accurate).
+#   2. find_active_repo cold-boot scan, cached for CACHE_TTL_COLD.
+_widget_git_active_repo() {
+    local state="${XDG_CACHE_HOME:-$HOME/.cache}/geekbar/active_repo"
+    if [[ -f "$state" ]]; then
+        local repo; repo=$(< "$state")
+        if [[ -n "$repo" && -d "$repo/.git" ]]; then
+            printf '%s' "$repo"
+            return
+        fi
+    fi
+    cache_get gitrepo "$CACHE_TTL_COLD" find_active_repo
+}
+
 _widget_git_raw() {
     local repo
-    repo=$(cache_get gitrepo "$CACHE_TTL_LAZY" find_active_repo)
+    repo=$(_widget_git_active_repo)
     [[ -z "$repo" ]] && return
     cache_get gitstatus "$CACHE_TTL_LAZY" git_status "$repo"
 }
