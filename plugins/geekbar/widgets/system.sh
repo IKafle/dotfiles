@@ -70,6 +70,30 @@ widget_ram_menu() {
         "$__DIR__/actions.sh open-htop" true "$tooltip"
 }
 
+# ── swap ─────────────────────────────────────────────────────
+# Self-suppresses when SwapTotal=0 (e.g. zram-only or swapoff'd boxes).
+# Swap pressure shows here long before OOM — pairs with the RAM row.
+widget_swap_bar() { :; }
+
+widget_swap_menu() {
+    local pct used total gauge_str dot tooltip
+    read -r pct used total < <(
+        awk '/^SwapTotal:/ { t=$2 } /^SwapFree:/  { f=$2 }
+             END {
+                 if (t+0 == 0) { print "skip 0 0"; exit }
+                 u = t - f
+                 printf "%d %.1f %.1f", (u*100)/t, u/1048576, t/1048576
+             }' /proc/meminfo
+    )
+    [[ "$pct" == "skip" ]] && return
+    [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+    gauge_str=$(gauge "$pct" 8 50 80)
+    dot="<span color=\"$COLOR_DIM\">·</span>"
+    tooltip="Swap used=${used}G total=${total}G (${pct}%)"
+    pri_row 1 " SWAP  ${gauge_str}   $(printf '%3s' "${pct}")%   ${dot}   ${used}G / ${total}G" \
+        "" false "$tooltip"
+}
+
 # ── load ─────────────────────────────────────────────────────
 # (no bar segment — menu-only)
 widget_load_bar() { :; }

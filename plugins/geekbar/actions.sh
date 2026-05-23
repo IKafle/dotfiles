@@ -261,6 +261,12 @@ case "$action" in
         fi
         ;;
 
+    # ── reboot ───────────────────────────────────────────────
+    reboot-now)
+        # Type "yes" to proceed. Any other input cancels.
+        run_in_term 'cat /var/run/reboot-required 2>/dev/null; echo; [[ -r /var/run/reboot-required.pkgs ]] && { echo "Triggering packages:"; cat /var/run/reboot-required.pkgs; echo; }; read -rp "Type yes to reboot now: " c; [[ "$c" == "yes" ]] && sudo systemctl reboot || echo "Cancelled."'
+        ;;
+
     # ── clipboard ────────────────────────────────────────────
     copy-pubip)
         pubip_file="${XDG_CACHE_HOME:-$HOME/.cache}/geekbar/publicip"

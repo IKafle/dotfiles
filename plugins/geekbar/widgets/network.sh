@@ -106,6 +106,66 @@ widget_wifi_menu() {
 }
 
 # ─────────────────────────────────────────────────────────────
+#  pubip · external IP + city/country/org (ipapi.co, cached 1h)
+# ─────────────────────────────────────────────────────────────
+# Side effect: writes the plain IP to $GB_CACHE_DIR/publicip so the
+# pre-existing copy-pubip action can read it without re-parsing JSON.
+
+_widget_pubip_raw() {
+    cache_get pubip.json "$CACHE_TTL_GEO" bash -c '
+        out=$(curl -fsS --ipv4 --max-time 3 "https://ipapi.co/json/" 2>/dev/null)
+        [[ -z "$out" ]] && out=$(curl -fsS --max-time 3 "https://ipapi.co/json/" 2>/dev/null)
+        printf "%s" "$out"
+    '
+}
+
+widget_pubip_bar() { return; }
+
+widget_pubip_menu() {
+    command -v jq >/dev/null 2>&1 || return
+    local raw ip city cc org safe_ip safe_loc dot tooltip loc=""
+    raw=$(_widget_pubip_raw)
+    [[ -z "$raw" ]] && return
+    ip=$(jq -r   '.ip // empty'           <<< "$raw" 2>/dev/null)
+    city=$(jq -r '.city // empty'         <<< "$raw" 2>/dev/null)
+    cc=$(jq -r   '.country_code // empty' <<< "$raw" 2>/dev/null)
+    org=$(jq -r  '.org // empty'          <<< "$raw" 2>/dev/null)
+    [[ -z "$ip" ]] && return
+    printf '%s' "$ip" > "$GB_CACHE_DIR/publicip"
+    safe_ip=$(pango_escape "$ip")
+    [[ -n "$city" ]] && loc="$city"
+    [[ -n "$cc"   ]] && loc="${loc:+$loc, }$cc"
+    safe_loc=$(pango_escape "$loc")
+    dot="<span color=\"$COLOR_DIM\">·</span>"
+    tooltip="Public IP: ${ip}  loc=${city}, ${cc}  org=${org}  (click to copy)"
+    local label="<span color=\"$COLOR_ACCENT\">󰖟</span> ${safe_ip}"
+    [[ -n "$safe_loc" ]] && label+="   ${dot}   ${safe_loc}"
+    pri_row 4 "$label" \
+        "$__DIR__/actions.sh copy-pubip" false "$tooltip"
+}
+
+# ─────────────────────────────────────────────────────────────
+#  xfer · cumulative RX/TX on the default interface since boot
+# ─────────────────────────────────────────────────────────────
+
+widget_xfer_bar() { return; }
+
+widget_xfer_menu() {
+    local iface rx tx rx_h tx_h dot tooltip
+    iface=$(get_default_iface)
+    [[ -z "$iface" ]] && return
+    rx=$(net_bytes "$iface" rx)
+    tx=$(net_bytes "$iface" tx)
+    [[ -z "$rx" && -z "$tx" ]] && return
+    rx_h=$(human_bytes "${rx:-0}")
+    tx_h=$(human_bytes "${tx:-0}")
+    dot="<span color=\"$COLOR_DIM\">·</span>"
+    tooltip="${iface} cumulative since boot:  rx=${rx_h}  tx=${tx_h}"
+    pri_row 4 "<span color=\"$COLOR_ACCENT\">Σ</span> ↓${rx_h}  ↑${tx_h}   ${dot}   since boot" \
+        "" false "$tooltip"
+}
+
+# ─────────────────────────────────────────────────────────────
 #  dns · current resolver(s)
 # ─────────────────────────────────────────────────────────────
 

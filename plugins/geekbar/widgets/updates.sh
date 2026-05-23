@@ -60,3 +60,27 @@ widget_apt_menu() {
     pri_row 2 "<span color=\"$count_color\">󰚰 ${count} updates</span>${sec_chip}" \
         "$__DIR__/actions.sh apt-upgrade" true "apt: ${count} pending (${sec} security)"
 }
+
+# ── reboot ───────────────────────────────────────────────────
+# Debian/Ubuntu touches /var/run/reboot-required after kernel / libc /
+# microcode updates land. Self-suppresses when the flag file is absent.
+# /var/run/reboot-required.pkgs lists the triggering packages.
+widget_reboot_bar() { return; }
+
+widget_reboot_menu() {
+    [[ -f /var/run/reboot-required ]] || return
+    local first n pkgs="" safe tooltip
+    if [[ -r /var/run/reboot-required.pkgs ]]; then
+        n=$(wc -l < /var/run/reboot-required.pkgs 2>/dev/null)
+        first=$(head -n1 /var/run/reboot-required.pkgs 2>/dev/null)
+    fi
+    if [[ -n "${first:-}" ]]; then
+        if (( n > 1 )); then pkgs="${first} +$((n-1)) more"
+        else                 pkgs="$first"
+        fi
+    fi
+    safe=$(pango_escape "${pkgs:-restart pending}")
+    tooltip="Reboot required${pkgs:+ — packages: ${pkgs}}"
+    pri_row 2 "$(chip_crit ' REBOOT')  ${safe}" \
+        "$__DIR__/actions.sh reboot-now" true "$tooltip"
+}

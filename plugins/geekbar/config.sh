@@ -54,11 +54,11 @@ MENU_SECTIONS=(
 
 # Per-section widget membership (used by the menu loop).
 MENU_SECTION_context=(git k8s cloud vpn)
-MENU_SECTION_system=(uptime cpu ram load top_proc disk iowait battery)
-MENU_SECTION_network=(net wifi dns sock)
+MENU_SECTION_system=(uptime cpu ram swap load top_proc disk iowait battery)
+MENU_SECTION_network=(net pubip xfer wifi dns sock)
 MENU_SECTION_dev=(docker ports sshagent langver)
 MENU_SECTION_audio=(vol mic)
-MENU_SECTION_updates=(apt)
+MENU_SECTION_updates=(apt reboot)
 MENU_SECTION_extras=(clock weather)
 
 # ── weather location override ────────────────────────────────

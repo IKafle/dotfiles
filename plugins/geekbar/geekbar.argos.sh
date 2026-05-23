@@ -45,7 +45,7 @@ argos_sep
 
 # Row ceiling for the popup (GNOME PopupMenu doesn't scroll; overflow is invisible).
 # Override per-invocation: GB_MENU_MAX_ROWS=14 bash geekbar.argos.sh
-GB_MENU_MAX_ROWS="${GB_MENU_MAX_ROWS:-17}"
+GB_MENU_MAX_ROWS="${GB_MENU_MAX_ROWS:-21}"
 
 # ── 1. Collect widget rows ───────────────────────────────────
 # Each widget _menu emits #P<n>#-prefixed lines. We split priority +
