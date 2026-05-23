@@ -86,6 +86,21 @@ BATTERY_PCT_CRIT=15       # %  — critical
 LOAD_WARN_MULT="0.8"
 LOAD_CRIT_MULT="1.2"
 
+# ── notifications (edge-triggered) ───────────────────────────
+# Master switch. 0 disables all geekbar desktop notifications.
+ENABLE_NOTIFICATIONS=1
+
+# Per-widget opt-out. Set to 0 to silence that widget's transitions.
+# Sensible defaults shown; comment out (or set 0) any you find noisy.
+NOTIFY_disk=1
+NOTIFY_cpu=1
+NOTIFY_ram=1
+NOTIFY_battery=1
+NOTIFY_vpn=1
+NOTIFY_k8s=1
+NOTIFY_sshagent=1
+NOTIFY_apt=1
+
 # ── clock ────────────────────────────────────────────────────
 # Bar format follows date(1). Default: short weekday + 24h time.
 CLOCK_BAR_FORMAT="+%a %H:%M"

@@ -81,8 +81,17 @@ _widget_k8s_is_danger() {
 
 widget_k8s_bar() {
     command -v kubectl >/dev/null 2>&1 || return
-    local ctx ns
+    local ctx ns bucket body
     ctx=$(_widget_k8s_context)
+    if [[ -n "$ctx" ]] && _widget_k8s_is_danger "$ctx"; then
+        bucket="crit"; body="$ctx (danger context — be careful)"
+    else
+        bucket="ok"
+        if [[ -n "$ctx" ]]; then body="$ctx (safe context)"
+        else body="no context"
+        fi
+    fi
+    notify_edge k8s "$bucket" "⚠️ k8s context" "$body"
     [[ -z "$ctx" ]] && return
     ns=$(_widget_k8s_namespace)
     # Argos bar honors only a single trailing `| color=` directive; selective
@@ -200,8 +209,14 @@ _widget_vpn_detect() {
 }
 
 widget_vpn_bar() {
-    local name
+    local name bucket body
     name=$(_widget_vpn_detect)
+    if [[ -n "$name" ]]; then
+        bucket="up"; body="$name"
+    else
+        bucket="down"; body=""
+    fi
+    notify_edge vpn "$bucket" "🔓 VPN $bucket" "$body"
     [[ -z "$name" ]] && return
     printf '󰦝 %s' "$name"
 }

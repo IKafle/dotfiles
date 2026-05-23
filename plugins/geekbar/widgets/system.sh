@@ -20,6 +20,12 @@ widget_uptime_menu() {
 # ── cpu ──────────────────────────────────────────────────────
 widget_cpu_bar() {
     local t; t=$(cpu_temp)
+    local bucket="ok"
+    if   (( t >= CPU_TEMP_CRIT )); then bucket="crit"
+    elif (( t >= CPU_TEMP_WARN )); then bucket="warn"
+    fi
+    local usage; usage=$(cpu_usage_pct)
+    notify_edge cpu "$bucket" "🔥 CPU $bucket" "${t}°C — ${usage}% load"
     printf ' %s°' "$t"
 }
 
@@ -37,6 +43,11 @@ widget_cpu_menu() {
 widget_ram_bar() {
     local pct used total spark
     read -r pct used total < <(ram_info)
+    local bucket="ok"
+    if   (( pct >= RAM_PCT_CRIT )); then bucket="crit"
+    elif (( pct >= RAM_PCT_WARN )); then bucket="warn"
+    fi
+    notify_edge ram "$bucket" "🧠 RAM $bucket" "${pct}% used (${used} / ${total} GB)"
     spark=$(sparkline "$pct" 4 ram)
     printf '%s %sG' "$spark" "$used"
 }
@@ -135,17 +146,32 @@ _disk_raw() {
 }
 
 widget_disk_bar() {
-    local raw worst_mount="" worst_pct=0 mount used size pct
+    local raw worst_mount="" worst_pct=0 worst_used=0 worst_size=0
+    local mount used size pct
     raw=$(_disk_raw)
     [[ -z "$raw" ]] && return
     while read -r mount used size pct; do
         [[ -z "$mount" ]] && continue
-        if (( pct >= DISK_PCT_WARN )) && (( pct > worst_pct )); then
+        if (( pct > worst_pct )); then
             worst_pct=$pct
             worst_mount=$mount
+            worst_used=$used
+            worst_size=$size
         fi
     done <<< "$raw"
     [[ -z "$worst_mount" ]] && return
+
+    local bucket="ok"
+    if   (( worst_pct >= DISK_PCT_CRIT )); then bucket="crit"
+    elif (( worst_pct >= DISK_PCT_WARN )); then bucket="warn"
+    fi
+    local used_h size_h
+    used_h=$(human_bytes "$(( worst_used * 1024 ))")
+    size_h=$(human_bytes "$(( worst_size * 1024 ))")
+    notify_edge disk "$bucket" "💾 Disk $bucket" \
+        "${worst_mount}: ${worst_pct}% used (${used_h} / ${size_h})"
+
+    (( worst_pct >= DISK_PCT_WARN )) || return
 
     local short
     if [[ "$worst_mount" == "/" ]]; then
@@ -246,6 +272,18 @@ widget_battery_bar() {
     local pct status
     pct=$(cat "$d/capacity" 2>/dev/null) || return
     status=$(cat "$d/status" 2>/dev/null) || return
+
+    local bucket="ok"
+    case "$status" in
+        Charging|Full) bucket="ok" ;;
+        *)
+            if   (( pct < BATTERY_PCT_CRIT )); then bucket="crit"
+            elif (( pct < BATTERY_PCT_WARN )); then bucket="warn"
+            else bucket="ok"
+            fi
+            ;;
+    esac
+    notify_edge battery "$bucket" "🔋 Battery $bucket" "${pct}% (${status})"
 
     case "$status" in
         Charging|Full) return ;;

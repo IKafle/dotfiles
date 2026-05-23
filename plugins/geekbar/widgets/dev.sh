@@ -136,6 +136,11 @@ _sshagent_status() {
 widget_sshagent_bar() {
     command -v ssh-add >/dev/null 2>&1 || return
     local n; n=$(_sshagent_status)
+    if [[ "$n" == "0" ]]; then
+        notify_edge sshagent empty "🔑 ssh-agent" "no identities loaded — run 'ssh-add'"
+    elif [[ "$n" != "-1" && -n "$n" ]]; then
+        notify_edge sshagent loaded "🔑 ssh-agent" "$n identities loaded"
+    fi
     [[ "$n" == "0" ]] || return
     printf '󰌆 ssh:0'
 }

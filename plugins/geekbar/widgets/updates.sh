@@ -19,13 +19,19 @@ _apt_security_count() {
 
 widget_apt_bar() {
     command -v apt >/dev/null 2>&1 || return
-    local count
+    local count sec
     count=$(cache_get apt.count 3600 _apt_count)
-    [[ -z "$count" || "$count" == "0" ]] && return
-
-    local sec
+    count="${count:-0}"
     sec=$(cache_get apt.security 3600 _apt_security_count)
     sec="${sec:-0}"
+
+    local bucket="ok"
+    if   (( sec > 0   )); then bucket="crit"
+    elif (( count > 0 )); then bucket="warn"
+    fi
+    notify_edge apt "$bucket" "🛡️ apt updates" "${count} pending (${sec} security)"
+
+    (( count == 0 )) && return
 
     if (( sec > 0 )); then
         printf '! 󰚰 %d (%d sec)' "$count" "$sec"
