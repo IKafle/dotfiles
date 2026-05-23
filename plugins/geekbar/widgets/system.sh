@@ -26,7 +26,7 @@ widget_cpu_bar() {
     fi
     local usage; usage=$(cpu_usage_pct)
     notify_edge cpu "$bucket" "🔥 CPU $bucket" "${t}°C — ${usage}% load"
-    printf ' %s°' "$t"
+    printf ' %s%% %s°' "$usage" "$t"
 }
 
 widget_cpu_menu() {
@@ -184,18 +184,10 @@ widget_disk_bar() {
     notify_edge disk "$bucket" "💾 Disk $bucket" \
         "${worst_mount}: ${worst_pct}% used (${used_h} / ${size_h})"
 
-    (( worst_pct >= DISK_PCT_WARN )) || return
-
-    local short
-    if [[ "$worst_mount" == "/" ]]; then
-        short="/"
-    else
-        short="${worst_mount##*/}"
-    fi
     if (( worst_pct >= DISK_PCT_CRIT )); then
-        printf '!  %s %d%%' "$short" "$worst_pct"
+        printf '!  %d%%' "$worst_pct"
     else
-        printf ' %s %d%%' "$short" "$worst_pct"
+        printf ' %d%%' "$worst_pct"
     fi
 }
 
@@ -305,12 +297,7 @@ widget_battery_bar() {
     esac
     notify_edge battery "$bucket" "🔋 Battery $bucket" "${pct}% (${status})"
 
-    case "$status" in
-        Charging|Full) return ;;
-    esac
-    (( pct >= BATTERY_PCT_WARN )) && return
-
-    if (( pct < BATTERY_PCT_CRIT )); then
+    if [[ "$bucket" == "crit" ]]; then
         printf '! 󰁾 %d%%' "$pct"
     else
         printf '󰁾 %d%%' "$pct"

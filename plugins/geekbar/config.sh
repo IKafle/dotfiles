@@ -21,18 +21,20 @@ BAR_WIDGETS=(
     k8s          # heartbeat — only when kubectl context configured
     cloud        # heartbeat — only when AWS/GCP/Azure profile detected
     vpn          # alarm — only when a VPN connection is active
-    docker       # heartbeat — only when ≥1 container running
-    cpu          # heartbeat (temp °C)
+    cpu          # heartbeat (usage% + temp °C)
     ram          # heartbeat (spark + used GB)
+    disk         # heartbeat — worst-mount used% (always; "!" prefix at CRIT)
     net          # heartbeat (rx/tx) — only when an interface is up
-    disk         # alarm — only when a mount's used% ≥ DISK_PCT_WARN
-    iowait       # alarm — only when %iowait ≥ IOWAIT_PCT_WARN
+    wifi         # heartbeat — signal bars + SSID (when on wifi)
+    docker       # heartbeat — container count (always when docker installed)
+    battery      # heartbeat — laptop only; always-on ("!" prefix when CRIT)
+    uptime       # heartbeat — compact uptime ("12m", "3h", "4d")
     top_proc     # alarm — only when CPU% or MEM% above threshold
     apt          # alarm — only when apt updates are pending
-    battery      # alarm — laptop only; only when on battery and low
+    iowait       # alarm — only when %iowait ≥ IOWAIT_PCT_WARN
     sshagent     # alarm — only when ssh-agent has 0 identities
     mic          # alarm — only when mic is muted
-    # uptime     # menu-only by default
+    # load       # menu-only by default
     # weather    # menu-only by default; uncomment to add to bar
     # nepse      # opt-in: uncomment to show NEPSE during market hours
     # ports      # opt-in: bar segment showing count + listening DEV_PORTS

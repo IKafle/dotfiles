@@ -5,9 +5,10 @@
 # ─────────────────────────────────────────────────────────────
 
 widget_docker_bar() {
+    command -v docker >/dev/null 2>&1 || return
     local n
     n=$(cache_get docker "$CACHE_TTL_SLOW" bash -c 'docker ps -q 2>/dev/null | wc -l')
-    [[ -z "$n" || "$n" == "0" ]] && return
+    [[ -z "$n" ]] && n=0
     printf ' %s' "$n"
 }
 
