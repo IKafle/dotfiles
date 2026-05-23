@@ -4,14 +4,139 @@
 _BX_MOD_dev_tools_LOADED=1
 
 # ── Git ───────────────────────────────────────────────────────
+# Functions for git aliases that need arguments or logic. Pairs with
+# the pure aliases in 20-aliases.sh. Convention: oh-my-zsh `git` plugin
+# with a few additions (gsync, gparent, gbgone, gprune, gundo).
 
-# git commit with message — fixes the broken "alias cm" that couldn't take args
-cm() { git commit -m "$*"; }
+# Detect the repo's default branch. Falls back to "master".
+git_main_branch() {
+    local ref
+    for ref in refs/{heads,remotes/origin}/{main,master,trunk,mainline,default,stable,development}; do
+        if command git show-ref --quiet --verify "$ref" 2>/dev/null; then
+            printf '%s\n' "${ref##*/}"
+            return
+        fi
+    done
+    printf 'master\n'
+}
 
-# git checkout — fixes the broken "alias gc" that couldn't take args
-gc() { git checkout "$@"; }
+# Current branch name, or short SHA when detached.
+git_current_branch() {
+    local ref
+    ref=$(command git symbolic-ref --quiet HEAD 2>/dev/null) \
+        || ref=$(command git rev-parse --short HEAD 2>/dev/null) \
+        || return
+    printf '%s\n' "${ref#refs/heads/}"
+}
 
-# Pretty git log with graph
+# checkout
+gco()  { git checkout "$@"; }
+gcb()  { git checkout -b "$@"; }
+gcm()  { git checkout "$(git_main_branch)"; }    # checkout main/master
+gcop() { git checkout -; }                       # back to previous branch (`gco -`)
+
+# commit
+gcmsg() { git commit --message "$*"; }                          # quick commit -m
+gcam()  { git add --all && git commit --message "$*"; }         # add + commit
+gca()   { git commit --verbose --amend "$@"; }                  # amend, opens editor
+gcanf() { git commit --verbose --amend --no-edit "$@"; }        # amend, keep message
+
+# push helpers
+gpsup() { git push --set-upstream origin "$(git_current_branch)"; }    # first push of a new branch
+
+# rebase / merge against main
+gmom()  { git merge "origin/$(git_main_branch)"; }
+grbm()  { git rebase "$(git_main_branch)"; }
+grbom() { git rebase "origin/$(git_main_branch)"; }
+
+# Undo last commit, keep changes staged. The everyday "oops, edit the last commit" button.
+gundo() { git reset --soft HEAD~1; }
+
+# WIP commit (saves a snapshot you can undo with gunwip).
+gwip() {
+    git add --all
+    local deleted
+    deleted=$(git ls-files --deleted)
+    [[ -n "$deleted" ]] && git rm $deleted >/dev/null
+    git commit --no-verify --no-gpg-sign --message "--wip-- [skip ci]"
+}
+gunwip() {
+    local subject
+    subject=$(git log -n 1 --pretty=format:%s 2>/dev/null)
+    if [[ "$subject" == "--wip--"* ]]; then
+        git reset HEAD~1
+    else
+        echo "last commit is not a --wip-- snapshot; refusing"
+        return 1
+    fi
+}
+
+# Throw away ALL local changes and resync the current branch to its
+# upstream. The "I just want to start from a clean tree" button.
+gsync() {
+    local branch upstream
+    branch=$(git_current_branch) || { echo "not a git repo"; return 1; }
+    upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null) || {
+        echo "no upstream tracking branch for $branch — set one with: git branch --set-upstream-to=origin/$branch"
+        return 1
+    }
+    echo "→ resetting $branch to $upstream (local changes will be discarded)"
+    git fetch --prune origin || return 1
+    git reset --hard "$upstream" || return 1
+    git clean -fd
+    echo "✓ $branch == $upstream"
+}
+
+# Best-effort parent branch (the branch this one was forked from).
+# Heuristic: most recent branch sharing an ancestor with HEAD.
+gparent() {
+    local cur out
+    cur=$(git_current_branch) || { echo "not a git repo"; return 1; }
+    out=$(git show-branch --all 2>/dev/null \
+        | sed 's/].*//' \
+        | grep '\*' \
+        | grep -v "$cur" \
+        | head -n1 \
+        | sed -e 's/^.*\[//' -e 's/[~^].*//')
+    if [[ -n "$out" ]]; then
+        printf '%s\n' "$out"
+    else
+        echo "(could not determine parent branch)"
+        return 1
+    fi
+}
+
+# Delete local branches whose upstream is gone (typical after PR merge + remote delete).
+gbgone() {
+    local branches
+    branches=$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads \
+        | awk '$2 == "[gone]" { print $1 }')
+    if [[ -z "$branches" ]]; then
+        echo "no branches with gone upstreams"
+        return 0
+    fi
+    echo "deleting:"
+    echo "$branches" | sed 's/^/  /'
+    echo "$branches" | xargs git branch -D
+}
+
+# Delete local branches already merged into the default branch.
+gprune() {
+    local main
+    main=$(git_main_branch)
+    local to_delete
+    to_delete=$(git branch --merged "$main" \
+        | grep -vE "(^\*|^\s*${main}\s*$|^\s*main\s*$|^\s*master\s*$)")
+    if [[ -z "$to_delete" ]]; then
+        echo "no merged local branches to prune"
+        return 0
+    fi
+    echo "deleting:"
+    echo "$to_delete" | sed 's/^/  /'
+    echo "$to_delete" | xargs git branch -d
+}
+
+# Pretty git log with graph.
 gitlog() {
     git log \
         --graph \
@@ -296,20 +421,55 @@ shortcuts() {
         _cmd "vault"                 "cd ~/vault"
         _cmd "inbox"                 "ls ~/vault/inbox"
 
-        _sec "Git"
-        _cmd "gs"                    "git status"
-        _cmd "gaa"                   "git add ."
-        _cmd "cm <msg>"              "git commit -m"
-        _cmd "gpu"                   "git push"
-        _cmd "gp"                    "git pull"
-        _cmd "gl"                    "git log — graph, all branches"
-        _cmd "gb"                    "git branch"
-        _cmd "gd"                    "git diff"
-        _cmd "gds"                   "git diff --staged"
-        _cmd "gst"                   "git stash"
-        _cmd "gsp"                   "git stash pop"
-        _cmd "gc <branch>"           "git checkout"
+        _sec "Git — status / add / diff"
+        _cmd "gst"                   "git status"
+        _cmd "gss"                   "git status -sb (short + branch)"
+        _cmd "ga / gaa / gap"        "git add  /  add --all  /  add --patch"
+        _cmd "gd / gdc / gds"        "diff  /  diff --cached  /  diff --staged"
+
+        _sec "Git — branch / checkout"
+        _cmd "gb / gba"              "git branch  /  branch --all"
+        _cmd "gbd / gbD"             "branch --delete  /  --delete --force"
+        _cmd "gco <ref>"             "git checkout"
+        _cmd "gcb <name>"            "checkout -b (new branch)"
+        _cmd "gcm"                   "checkout the default branch (main/master)"
+        _cmd "gcop"                  "checkout - (previous branch)"
+        _cmd "gparent"               "show the parent branch (best-effort)"
+
+        _sec "Git — commit"
+        _cmd "gcmsg <msg>"           "git commit -m"
+        _cmd "gcam <msg>"            "git add -A && commit -m"
+        _cmd "gca"                   "amend (opens editor)"
+        _cmd "gcanf"                 "amend, keep message"
+        _cmd "gundo"                 "undo last commit, keep changes staged"
+        _cmd "gwip / gunwip"         "WIP snapshot  /  undo WIP snapshot"
+
+        _sec "Git — sync (pull / push / fetch)"
+        _cmd "gl / glr"              "git pull  /  pull --rebase"
+        _cmd "gp / gpf / gpff"       "push  /  --force-with-lease  /  --force"
+        _cmd "gpsup"                 "push -u origin HEAD (first push of new branch)"
+        _cmd "gf / gfa"              "fetch  /  fetch --all --prune"
+        _cmd "gsync"                 "discard local, hard-reset to upstream"
+
+        _sec "Git — log / stash / rebase / cherry-pick"
+        _cmd "glo / glog / gloga"    "oneline  /  +graph  /  +graph --all"
         _cmd "gitlog"                "pretty graph log with author + time"
+        _cmd "gsta / gstp / gstl"    "stash push  /  pop  /  list"
+        _cmd "gsts / gstd"           "stash show -p  /  drop"
+        _cmd "grb / grbi"            "rebase  /  rebase -i"
+        _cmd "grba / grbc"           "rebase --abort  /  --continue"
+        _cmd "grbm / grbom"          "rebase main  /  rebase origin/main"
+        _cmd "gcp / gcpa / gcpc"     "cherry-pick  /  --abort  /  --continue"
+        _cmd "gm / gma / gmom"       "merge  /  --abort  /  merge origin/main"
+
+        _sec "Git — reset / clean / housekeeping"
+        _cmd "grh / grhh"            "reset  /  reset --hard"
+        _cmd "gclean"                "git clean -fd"
+        _cmd "nah"                   "reset --hard + clean + abort rebase"
+        _cmd "gbgone"                "delete locals whose upstream is gone"
+        _cmd "gprune"                "delete locals merged into main"
+        _cmd "gr / grv"              "remote  /  remote -v"
+        _cmd "gwt"                   "git worktree"
 
         _sec "Files & Directories"
         _cmd "mkcd <dir>"            "mkdir + cd in one step"

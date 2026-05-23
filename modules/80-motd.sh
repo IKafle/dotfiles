@@ -139,7 +139,7 @@ __motd_full() {
     printf '\n'
     printf "  %s\n" "$SEP"
     printf "  ${CY}nav   ${R}..  ...  ....  -    dev  vault  inbox\n"
-    printf "  ${CY}git   ${R}gs  gaa  cm  gpu  gl  gb  gd  gst  gsp  gc\n"
+    printf "  ${CY}git   ${R}gst  gss  gaa  gcmsg  gp  gl  gco  gcb  gsync  gparent  nah\n"
     printf "  ${CY}code  ${R}mkcd  extract  serve  activate  countdown  note\n"
     printf "  ${CY}net   ${R}netspeed  ports  myip  portcheck\n"
     printf "  ${CY}sys   ${R}battery  psg  dsize  ff\n"
