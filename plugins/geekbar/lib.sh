@@ -237,10 +237,25 @@ git_status() {
     )
 }
 
-# ── find_active_repo — most recently modified repo under GIT_WATCH_DIRS
+# ── find_active_repo — cold-boot fallback only.
+# The shell hook in modules/45-geekbar-track.sh is the primary signal
+# (writes $XDG_CACHE_HOME/geekbar/active_repo on every cd). This function
+# runs when that state file is missing/empty — e.g. fresh login session
+# before any terminal has fired a prompt. It scans a portable set of
+# conventional project roots for the most-recently-modified .git and
+# is intentionally NOT user-configurable (no tracked machine paths).
 find_active_repo() {
+    local roots=(
+        "$HOME/dev"
+        "$HOME/code"
+        "$HOME/Projects"
+        "$HOME/projects"
+        "$HOME/src"
+        "$HOME/work"
+        "$HOME/repos"
+    )
     local newest="" newest_ts=0
-    for root in "${GIT_WATCH_DIRS[@]}"; do
+    for root in "${roots[@]}"; do
         [[ -d "$root" ]] || continue
         while IFS= read -r repo; do
             [[ -z "$repo" ]] && continue
