@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
 #  geekbar :: widgets/system
-#  uptime · cpu · ram · load · top_proc · disk
+#  uptime · cpu · ram · load · top_proc · disk · iowait · battery
 # ─────────────────────────────────────────────────────────────
 
 # ── uptime ───────────────────────────────────────────────────
@@ -177,4 +177,95 @@ widget_disk_menu() {
         color=$(color_for "$pct" "$DISK_PCT_WARN" "$DISK_PCT_CRIT")
         argos_item " $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
     done <<< "$rows"
+}
+
+# ── iowait ───────────────────────────────────────────────────
+# Returns "<pct>" between two /proc/stat samples, or empty on first
+# call (no baseline). State persists across argos refreshes.
+_iowait_pct() {
+    local f="$GB_STATE_DIR/iowait.stat"
+    local line; line=$(head -n1 /proc/stat)
+    local vals
+    read -r -a vals <<< "$line"
+    local iowait="${vals[5]}"
+    local total=0 v
+    for v in "${vals[@]:1}"; do total=$(( total + v )); done
+
+    if [[ -f "$f" ]]; then
+        local prev_io prev_total
+        read -r prev_io prev_total < "$f"
+        local d_io=$(( iowait - prev_io ))
+        local d_total=$(( total - prev_total ))
+        echo "$iowait $total" > "$f"
+        (( d_total <= 0 )) && { printf "0.0"; return; }
+        awk -v i="$d_io" -v t="$d_total" 'BEGIN { printf "%.1f", (i/t) * 100 }'
+    else
+        echo "$iowait $total" > "$f"
+    fi
+}
+
+widget_iowait_bar() {
+    local pct; pct=$(_iowait_pct)
+    [[ -z "$pct" ]] && return
+    if (( $(echo "$pct < $IOWAIT_PCT_WARN" | bc -l 2>/dev/null || echo 1) )); then
+        return
+    fi
+    local rounded; rounded=$(printf "%.0f" "$pct")
+    if (( $(echo "$pct >= $IOWAIT_PCT_CRIT" | bc -l 2>/dev/null || echo 0) )); then
+        printf '! 󰋊 io %s%%' "$rounded"
+    else
+        printf '󰋊 io %s%%' "$rounded"
+    fi
+}
+
+widget_iowait_menu() {
+    local pct color
+    pct=$(_iowait_pct)
+    if [[ -z "$pct" ]]; then
+        argos_dim "󰋊 I/O wait    —"
+        return
+    fi
+    color=$(color_for "$pct" "$IOWAIT_PCT_WARN" "$IOWAIT_PCT_CRIT")
+    argos_item "$(printf '󰋊 I/O wait    %s%%' "$pct")" "$color"
+}
+
+# ── battery ──────────────────────────────────────────────────
+# Self-suppress on desktops. First BAT* dir wins.
+_battery_dir() {
+    local d
+    for d in /sys/class/power_supply/BAT*; do
+        [[ -d "$d" ]] || continue
+        printf "%s" "$d"
+        return
+    done
+}
+
+widget_battery_bar() {
+    local d; d=$(_battery_dir)
+    [[ -z "$d" ]] && return
+    local pct status
+    pct=$(cat "$d/capacity" 2>/dev/null) || return
+    status=$(cat "$d/status" 2>/dev/null) || return
+
+    case "$status" in
+        Charging|Full) return ;;
+    esac
+    (( pct >= BATTERY_PCT_WARN )) && return
+
+    if (( pct < BATTERY_PCT_CRIT )); then
+        printf '! 󰁾 %d%%' "$pct"
+    else
+        printf '󰁾 %d%%' "$pct"
+    fi
+}
+
+widget_battery_menu() {
+    local d; d=$(_battery_dir)
+    [[ -z "$d" ]] && return
+    local pct status color
+    pct=$(cat "$d/capacity" 2>/dev/null) || return
+    status=$(cat "$d/status" 2>/dev/null) || return
+    # Battery semantics are inverted (high=ok, low=bad); flip for color_for.
+    color=$(color_for $(( 100 - pct )) $(( 100 - BATTERY_PCT_WARN )) $(( 100 - BATTERY_PCT_CRIT )))
+    argos_item "$(printf '󰁾 Battery     %d%%  ·  %s' "$pct" "$status")" "$color"
 }

@@ -1,8 +1,29 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
 #  geekbar :: widgets/extras
-#  weather · nepse
+#  clock · weather · nepse
 # ─────────────────────────────────────────────────────────────
+
+# ── clock ────────────────────────────────────────────────────
+widget_clock_bar() {
+    printf ' %s' "$(date "${CLOCK_BAR_FORMAT:-+%a %H:%M}")"
+}
+
+widget_clock_menu() {
+    argos_item " Local       $(date '+%a %b %d  %H:%M')"
+    local entry label tz out
+    for entry in "${CLOCK_EXTRA_TZS[@]:-}"; do
+        [[ -z "$entry" ]] && continue
+        label="${entry%%/*}"
+        tz="${entry#*/}"
+        [[ -z "$label" || -z "$tz" || "$label" == "$entry" ]] && continue
+        # `date` silently falls back to UTC on unknown TZ; verify zoneinfo exists.
+        [[ -r "/usr/share/zoneinfo/$tz" ]] || continue
+        out=$(TZ="$tz" date '+%a %b %d  %H:%M' 2>/dev/null)
+        [[ -z "$out" ]] && continue
+        argos_item " $(printf '%-10s' "$label")  $out"
+    done
+}
 
 # Resolve the location once (config override > geo).
 _widget_weather_loc() {
