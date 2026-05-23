@@ -85,18 +85,36 @@ _bx_resolve_tool() {
     return 1
 }
 
-# Resolve a plugin name to plugins/<name>.<kind>.sh.
+# Resolve a plugin name to its entrypoint file.
+# Supports two forms:
+#   file-form:  plugins/<name>.<kind>.sh
+#   dir-form:   plugins/<name>/<name>.<kind>.sh
+# Always emits the entrypoint FILE path (callers rely on this invariant).
 _bx_resolve_plugin() {
     local query=$1 hits=()
     [[ -z "$query" ]] && return 1
     shopt -s nullglob
     for f in "$BX_PLUGINS"/*.sh; do
+        [[ -f "$f" ]] || continue
         local base=${f##*/}                  # e.g. geekbar.argos.sh
         local stem=${base%.sh}               # e.g. geekbar.argos
         local name=${stem%.*}                # e.g. geekbar
         if [[ "$base" == "$query" || "$stem" == "$query" || "$name" == "$query" ]]; then
             hits+=("$f")
         fi
+    done
+    for d in "$BX_PLUGINS"/*/; do
+        [[ -d "$d" ]] || continue
+        local dname=${d%/}; dname=${dname##*/}
+        local ent
+        for ent in "$d$dname".*.sh; do
+            [[ -f "$ent" ]] || continue
+            local base=${ent##*/}
+            local stem=${base%.sh}
+            if [[ "$dname" == "$query" || "$base" == "$query" || "$stem" == "$query" ]]; then
+                hits+=("$ent")
+            fi
+        done
     done
     shopt -u nullglob
     if (( ${#hits[@]} == 0 )); then
@@ -105,6 +123,22 @@ _bx_resolve_plugin() {
         bx_err "ambiguous plugin name '$query' matches: ${hits[*]##*/}"
         return 2
     fi
+    printf '%s\n' "${hits[0]}"
+}
+
+# Locate the entrypoint file inside a directory-form plugin.
+# $1: directory path. Emits the entrypoint file path on stdout or returns 1.
+_bx_plugin_dir_entrypoint() {
+    local dir=$1
+    [[ -d "$dir" ]] || return 1
+    local dname=${dir%/}; dname=${dname##*/}
+    local ent hits=()
+    shopt -s nullglob
+    for ent in "$dir"/"$dname".*.sh; do
+        [[ -f "$ent" ]] && hits+=("$ent")
+    done
+    shopt -u nullglob
+    (( ${#hits[@]} == 1 )) || return 1
     printf '%s\n' "${hits[0]}"
 }
 
@@ -505,14 +539,29 @@ cmd_selftest() {
         _bx_st_fail "tools missing # bx-purpose: ${missing_purpose[*]}"
     fi
 
-    # 5. Every plugin has the three required headers.
-    local missing_plugin_meta=()
+    # 5. Every plugin (file- or directory-form) has the three required headers.
+    local missing_plugin_meta=() malformed_dirs=()
     shopt -s nullglob
     for f in "$BX_HOME"/plugins/*.sh; do
+        [[ -f "$f" ]] || continue
         if ! grep -q "^# bx-purpose:" "$f" \
             || ! grep -q "^# bx-plugin-kind:" "$f" \
             || ! grep -q "^# bx-plugin-target:" "$f"; then
             missing_plugin_meta+=("$(basename "$f")")
+        fi
+    done
+    local d ent
+    for d in "$BX_HOME"/plugins/*/; do
+        [[ -d "$d" ]] || continue
+        if ! ent=$(_bx_plugin_dir_entrypoint "$d"); then
+            local dname=${d%/}; dname=${dname##*/}
+            malformed_dirs+=("$dname")
+            continue
+        fi
+        if ! grep -q "^# bx-purpose:" "$ent" \
+            || ! grep -q "^# bx-plugin-kind:" "$ent" \
+            || ! grep -q "^# bx-plugin-target:" "$ent"; then
+            missing_plugin_meta+=("${ent#"$BX_HOME"/plugins/}")
         fi
     done
     shopt -u nullglob
@@ -520,6 +569,14 @@ cmd_selftest() {
         _bx_st_ok "all plugins have required metadata"
     else
         _bx_st_fail "plugins missing metadata: ${missing_plugin_meta[*]}"
+    fi
+
+    # 5b. Directory-form plugins must contain an entrypoint named
+    #     <name>.<kind>.sh matching the directory name.
+    if (( ${#malformed_dirs[@]} == 0 )); then
+        _bx_st_ok "directory-plugin entrypoint naming convention"
+    else
+        _bx_st_fail "directory plugins missing <name>.<kind>.sh entrypoint: ${malformed_dirs[*]}"
     fi
 
     # 6. bx doctor (delegated — covers bashrc hook, PATH, broken symlinks, etc.)
@@ -643,10 +700,18 @@ USAGE
     bx plugin disable <name>           remove external symlink (keeps source)
       → bx plugin disable geekbar
 
-    bx plugin new <name> --kind <k>    scaffold a new plugin
-      → bx plugin new mywidget --kind argos
+    bx plugin new <name> --kind <k> [--dir]
+      → bx plugin new mywidget --kind argos          # file form
+      → bx plugin new mywidget --kind argos --dir    # directory form
 
     bx plugin doctor                   verify each enabled plugin's symlink
+
+PLUGIN FORMS
+    file form    plugins/<name>.<kind>.sh                 — single-file plugin
+    dir  form    plugins/<name>/<name>.<kind>.sh + siblings
+                 use when a plugin needs lib.sh, widgets/, postenable.sh, etc.
+                 If plugins/<name>/postenable.sh is executable, `bx plugin
+                 enable <name>` runs it with BX_PLUGIN_NAME / BX_PLUGIN_DIR set.
 
 SUPPORTED KINDS
     argos       GNOME panel scripts under ~/.config/argos/
@@ -663,13 +728,35 @@ cmd_plugin_ls() {
     local any=0
     printf '%s%-22s %-12s %-8s %s%s\n' "${BX_C_GRAY}" "PLUGIN" "KIND" "STATE" "TARGET" "${BX_C_RESET}"
     shopt -s nullglob
+    local f d ent
     for f in "$BX_PLUGINS"/*.sh; do
+        [[ -f "$f" ]] || continue
         any=1
         local name kind target mark
         name=$(_bx_plugin_name "$f")
         kind=$(_bx_plugin_meta "$f" kind)
         target=$(_bx_plugin_meta "$f" target)
         if _bx_plugin_is_enabled "$f"; then
+            mark="${BX_C_GREEN}✔${BX_C_RESET}"
+        else
+            mark="${BX_C_GRAY}✘${BX_C_RESET}"
+        fi
+        printf '%-22s %-12s %s %s\n' "$name" "${kind:-?}" "$mark      " "${target:-—}"
+    done
+    for d in "$BX_PLUGINS"/*/; do
+        [[ -d "$d" ]] || continue
+        local dname=${d%/}; dname=${dname##*/}
+        if ! ent=$(_bx_plugin_dir_entrypoint "$d"); then
+            any=1
+            printf '%-22s %-12s %s %s\n' "$dname" "?" "${BX_C_YELLOW}!${BX_C_RESET}      " "missing entrypoint plugins/$dname/$dname.<kind>.sh"
+            continue
+        fi
+        any=1
+        local name kind target mark
+        name=$(_bx_plugin_name "$ent")
+        kind=$(_bx_plugin_meta "$ent" kind)
+        target=$(_bx_plugin_meta "$ent" target)
+        if _bx_plugin_is_enabled "$ent"; then
             mark="${BX_C_GREEN}✔${BX_C_RESET}"
         else
             mark="${BX_C_GRAY}✘${BX_C_RESET}"
@@ -700,8 +787,26 @@ cmd_plugin_enable() {
         # But still ensure the external symlink is healthy.
     fi
     _bx_plugin_apply enable "$src" "$kind" "$target_exp" || return $?
-    ln -sf "../plugins/$(basename "$src")" "$BX_ENABLED_PLUGINS/$name"
+    # Build the enabled-plugins/<name> symlink path relative to BX_PLUGINS.
+    # File form:  ../plugins/<name>.<kind>.sh
+    # Dir  form:  ../plugins/<name>/<name>.<kind>.sh
+    local src_dir=${src%/*} link_rel
+    if [[ "$src_dir" == "$BX_PLUGINS" ]]; then
+        link_rel="../plugins/${src##*/}"
+    else
+        local sub=${src_dir##*/}
+        link_rel="../plugins/$sub/${src##*/}"
+    fi
+    ln -sfn "$link_rel" "$BX_ENABLED_PLUGINS/$name"
     bx_ok "enabled plugin: $name  ${BX_C_GRAY}($kind → $target)${BX_C_RESET}"
+
+    # Directory-form plugins may ship a postenable.sh hook.
+    if [[ "$src_dir" != "$BX_PLUGINS" && -x "$src_dir/postenable.sh" ]]; then
+        printf -- '── postenable: %s ──\n' "$name" >&2
+        BX_PLUGIN_NAME="$name" BX_PLUGIN_DIR="$src_dir" "$src_dir/postenable.sh" || {
+            bx_warn "postenable hook for $name exited non-zero ($?)"
+        }
+    fi
 }
 
 cmd_plugin_disable() {
@@ -721,28 +826,57 @@ cmd_plugin_disable() {
 }
 
 cmd_plugin_new() {
-    local name=${1:-} kind=
+    local name=${1:-} kind= as_dir=0
     shift || true
     while (( $# > 0 )); do
         case $1 in
             --kind) kind=${2:-}; shift 2 || break ;;
+            --dir)  as_dir=1; shift ;;
             *) bx_err "unknown flag: $1"; return 2 ;;
         esac
     done
     if [[ -z "$name" || -z "$kind" ]]; then
-        bx_err "usage: bx plugin new <name> --kind <argos>"
+        bx_err "usage: bx plugin new <name> --kind <argos> [--dir]"
         return 2
     fi
     if [[ ! "$name" =~ ^[a-z][a-z0-9_-]*$ ]]; then
         bx_err "name must be lowercase, start with a letter, contain only [a-z0-9_-]"; return 1
     fi
-    local path="$BX_PLUGINS/$name.$kind.sh"
-    if [[ -e "$path" ]]; then bx_err "$path already exists"; return 1; fi
     local default_target
     case $kind in
         argos) default_target="~/.config/argos/$name.1s+.sh" ;;
         *)     default_target="~/PATH/TO/EXTERNAL/$name" ;;
     esac
+
+    if (( as_dir )); then
+        local dir="$BX_PLUGINS/$name"
+        local path="$dir/$name.$kind.sh"
+        if [[ -e "$dir" ]]; then bx_err "$dir already exists"; return 1; fi
+        mkdir -p "$dir/widgets"
+        cat > "$path" <<PLUGIN_EOF
+#!/usr/bin/env bash
+# bx-purpose: TODO one-line description
+# bx-plugin-kind: $kind
+# bx-plugin-target: $default_target
+
+# Directory-form plugin entrypoint. Resolve siblings relative to this file:
+#   __DIR__=\$(dirname "\$(readlink -f "\${BASH_SOURCE[0]}")")
+#   . "\$__DIR__/lib.sh"
+echo "$name :: hello"
+PLUGIN_EOF
+        chmod +x "$path"
+        cat > "$dir/lib.sh" <<'LIB_EOF'
+# Shared helpers for this plugin. Sourced by the entrypoint via:
+#   . "$__DIR__/lib.sh"
+LIB_EOF
+        : > "$dir/widgets/.gitkeep"
+        bx_ok "created $dir/ (entrypoint: $path)"
+        bx_dim "next:   \$EDITOR $path && bx plugin enable $name"
+        return 0
+    fi
+
+    local path="$BX_PLUGINS/$name.$kind.sh"
+    if [[ -e "$path" ]]; then bx_err "$path already exists"; return 1; fi
     cat > "$path" <<PLUGIN_EOF
 #!/usr/bin/env bash
 # bx-purpose: TODO one-line description
