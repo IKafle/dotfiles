@@ -1,22 +1,105 @@
 # bash completion for the bx CLI
 # Sourced by ~/.bin/modules/60-prompt.sh on every interactive shell.
+#
+# Design: one declarative dispatch. Each subcommand resolves to a primary
+# source-of-suggestions (e.g. disabled modules) and an optional fallback
+# (e.g. all modules) — so when the primary set is empty, the user still
+# sees something useful instead of silence. The plugin sub-tree mirrors
+# the same pattern.
 
+# ── Source listers (each emits one name per line) ───────────────────
+_bx_compl_all_modules() {
+    local f name
+    for f in "${BX_HOME:-$HOME/.bin}"/modules/*.sh; do
+        [[ -e "$f" ]] || continue
+        name=$(basename "$f" .sh)
+        printf '%s\n' "${name#[0-9][0-9]-}"
+    done
+}
+
+_bx_compl_enabled_modules() {
+    local f name
+    for f in "${BX_HOME:-$HOME/.bin}"/enabled/*.sh; do
+        [[ -e "$f" ]] || continue
+        name=$(basename "$f" .sh)
+        printf '%s\n' "${name#[0-9][0-9]-}"
+    done
+}
+
+_bx_compl_disabled_modules() {
+    comm -23 \
+        <(_bx_compl_all_modules | sort -u) \
+        <(_bx_compl_enabled_modules | sort -u)
+}
+
+_bx_compl_tools() {
+    local f
+    for f in "${BX_HOME:-$HOME/.bin}"/tools/*.sh; do
+        [[ -e "$f" ]] || continue
+        basename "$f" .sh
+    done
+}
+
+_bx_compl_all_plugins() {
+    local f name
+    for f in "${BX_HOME:-$HOME/.bin}"/plugins/*.sh; do
+        [[ -e "$f" ]] || continue
+        name=$(basename "$f")
+        printf '%s\n' "${name%%.*}"
+    done
+}
+
+_bx_compl_enabled_plugins() {
+    local f name
+    for f in "${BX_HOME:-$HOME/.bin}"/enabled-plugins/*; do
+        [[ -e "$f" ]] || continue
+        name=$(basename "$f")
+        printf '%s\n' "${name%%.*}"
+    done
+}
+
+_bx_compl_disabled_plugins() {
+    comm -23 \
+        <(_bx_compl_all_plugins | sort -u) \
+        <(_bx_compl_enabled_plugins | sort -u)
+}
+
+_bx_compl_plugin_kinds() {
+    # Mirror the kinds supported by _bx_plugin_apply in ~/.bin/bx.
+    printf 'argos\n'
+}
+
+# ── Suggest helper — primary set, with fallback if empty ─────────────
+# Usage: _bx_compl_suggest <cur> <primary-fn> [<fallback-fn> ...]
+# Calls each function in order; returns the first non-empty list, filtered
+# by the current word prefix. Guarantees the user never sees a silent void
+# when there is something useful to show.
+_bx_compl_suggest() {
+    local cur=$1; shift
+    local fn out=""
+    for fn in "$@"; do
+        out=$("$fn")
+        [[ -n "$out" ]] && break
+    done
+    compgen -W "$out" -- "$cur"
+}
+
+# ── Main entry point ────────────────────────────────────────────────
 _bx_complete() {
+    # Always reset — bash does not clear COMPREPLY between completion calls,
+    # so a stale value from a prior invocation can otherwise leak through.
+    COMPREPLY=()
+
     local cur prev cword words
-    _init_completion 2>/dev/null || {
-        # Minimal fallback if bash-completion isn't installed.
-        COMPREPLY=()
-        cur="${COMP_WORDS[COMP_CWORD]}"
-        prev="${COMP_WORDS[COMP_CWORD-1]}"
-        cword=$COMP_CWORD
-        words=("${COMP_WORDS[@]}")
-    }
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    cword=$COMP_CWORD
+    words=("${COMP_WORDS[@]}")
 
-    local bx_home="${BX_HOME:-$HOME/.bin}"
-    local subcmds="status ls enable disable reload edit new doctor run tools install plugin selftest help"
-    local plugin_subcmds="ls enable disable new doctor"
+    local subcmds="status ls list enable on disable off reload edit new doctor check health selftest test run exec tools install plugin plugins help"
+    local plugin_subcmds="ls enable disable new doctor help"
 
-    # Top-level subcommand completion
+    # Stage 1: top-level subcommand.
     if (( cword == 1 )); then
         COMPREPLY=( $(compgen -W "$subcmds" -- "$cur") )
         return 0
@@ -24,107 +107,59 @@ _bx_complete() {
 
     local cmd="${words[1]}"
 
-    # Helpers — emit short names (no NN- prefix, no .sh suffix)
-    _bx_complete_all_modules() {
-        local f name
-        for f in "$bx_home"/modules/*.sh; do
-            [[ -e "$f" ]] || continue
-            name=$(basename "$f" .sh)
-            name="${name#[0-9][0-9]-}"
-            printf '%s\n' "$name"
-        done
-    }
-
-    _bx_complete_enabled_modules() {
-        local f name
-        for f in "$bx_home"/enabled/*.sh; do
-            [[ -e "$f" ]] || continue
-            name=$(basename "$f" .sh)
-            name="${name#[0-9][0-9]-}"
-            printf '%s\n' "$name"
-        done
-    }
-
-    _bx_complete_disabled_modules() {
-        local enabled disabled
-        enabled=$(_bx_complete_enabled_modules)
-        comm -23 <(_bx_complete_all_modules | sort) <(printf '%s\n' "$enabled" | sort)
-    }
-
-    _bx_complete_tools() {
-        local f
-        for f in "$bx_home"/tools/*.sh; do
-            [[ -e "$f" ]] || continue
-            basename "$f" .sh
-        done
-    }
-
-    _bx_complete_plugins_all() {
-        local f name
-        for f in "$bx_home"/plugins/*.sh; do
-            [[ -e "$f" ]] || continue
-            name=$(basename "$f")
-            # strip .<kind>.sh suffix → name only
-            printf '%s\n' "${name%%.*}"
-        done
-    }
-
-    _bx_complete_plugins_enabled() {
-        local f name
-        for f in "$bx_home"/enabled-plugins/*; do
-            [[ -e "$f" ]] || continue
-            name=$(basename "$f")
-            printf '%s\n' "${name%%.*}"
-        done
-    }
-
-    _bx_complete_plugins_disabled() {
-        comm -23 <(_bx_complete_plugins_all | sort -u) <(_bx_complete_plugins_enabled | sort -u)
-    }
-
+    # Stage 2: subcommand-specific arg completion. Each branch follows the
+    # same shape: pick a primary suggestion source, optionally a fallback.
     case $cmd in
         enable|on)
-            COMPREPLY=( $(compgen -W "$(_bx_complete_disabled_modules)" -- "$cur") )
+            COMPREPLY=( $(_bx_compl_suggest "$cur" _bx_compl_disabled_modules _bx_compl_all_modules) )
             ;;
         disable|off)
-            COMPREPLY=( $(compgen -W "$(_bx_complete_enabled_modules)" -- "$cur") )
+            COMPREPLY=( $(_bx_compl_suggest "$cur" _bx_compl_enabled_modules _bx_compl_all_modules) )
             ;;
         edit)
-            COMPREPLY=( $(compgen -W "$(_bx_complete_all_modules)" -- "$cur") )
+            COMPREPLY=( $(_bx_compl_suggest "$cur" _bx_compl_all_modules) )
             ;;
         run|exec)
-            COMPREPLY=( $(compgen -W "$(_bx_complete_tools)" -- "$cur") )
+            COMPREPLY=( $(_bx_compl_suggest "$cur" _bx_compl_tools) )
             ;;
         new)
-            # If the user is typing the second arg, suggest --tool flag
-            if (( cword == 3 )); then
+            # `bx new <name> [--tool]` — after the name slot, suggest --tool.
+            if (( cword >= 3 )); then
                 COMPREPLY=( $(compgen -W "--tool" -- "$cur") )
             fi
             ;;
         plugin|plugins)
-            if (( cword == 2 )); then
-                COMPREPLY=( $(compgen -W "$plugin_subcmds" -- "$cur") )
-            else
-                local psub="${words[2]}"
-                case $psub in
-                    enable)
-                        COMPREPLY=( $(compgen -W "$(_bx_complete_plugins_disabled)" -- "$cur") )
-                        ;;
-                    disable)
-                        COMPREPLY=( $(compgen -W "$(_bx_complete_plugins_enabled)" -- "$cur") )
-                        ;;
-                    new)
-                        if [[ "$prev" == "--kind" ]]; then
-                            COMPREPLY=( $(compgen -W "argos" -- "$cur") )
-                        elif (( cword >= 4 )); then
-                            COMPREPLY=( $(compgen -W "--kind" -- "$cur") )
-                        fi
-                        ;;
-                esac
-            fi
+            _bx_complete_plugin
             ;;
     esac
     return 0
+}
+
+# Stage 2b: plugin sub-tree — same shape as the top-level dispatch.
+_bx_complete_plugin() {
+    # cword == 2 means the user is choosing the plugin verb.
+    if (( cword == 2 )); then
+        COMPREPLY=( $(compgen -W "$plugin_subcmds" -- "$cur") )
+        return 0
+    fi
+
+    local psub="${words[2]}"
+    case $psub in
+        enable)
+            COMPREPLY=( $(_bx_compl_suggest "$cur" _bx_compl_disabled_plugins _bx_compl_all_plugins) )
+            ;;
+        disable)
+            COMPREPLY=( $(_bx_compl_suggest "$cur" _bx_compl_enabled_plugins _bx_compl_all_plugins) )
+            ;;
+        new)
+            # `bx plugin new <name> --kind <kind>`
+            if [[ "$prev" == "--kind" ]]; then
+                COMPREPLY=( $(_bx_compl_suggest "$cur" _bx_compl_plugin_kinds) )
+            elif (( cword >= 4 )); then
+                COMPREPLY=( $(compgen -W "--kind" -- "$cur") )
+            fi
+            ;;
+    esac
 }
 
 complete -F _bx_complete bx
