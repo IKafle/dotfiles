@@ -113,15 +113,28 @@ widget_top_proc_bar() {
 
 widget_top_proc_menu() {
     local raw name pid cpu mem args
+    local action_pid="" action_name=""
     raw=$(top_cpu_proc)
     if [[ -n "$raw" ]]; then
         IFS='|' read -r name pid cpu mem args <<< "$raw"
         argos_item "󰓅 Top CPU     ${name} (${cpu}%) pid=${pid}"
+        action_pid="$pid"
+        action_name="$name"
     fi
     raw=$(top_mem_proc)
     if [[ -n "$raw" ]]; then
         IFS='|' read -r name pid cpu mem args <<< "$raw"
         argos_item " Top MEM     ${name} (${mem}%) pid=${pid}"
+        # Prefer the CPU offender for click actions; fall back to MEM if no CPU row.
+        if [[ -z "$action_pid" ]]; then
+            action_pid="$pid"
+            action_name="$name"
+        fi
+    fi
+    if [[ -n "$action_pid" ]]; then
+        echo "▶ htop -p ${action_pid} | bash='$__DIR__/actions.sh htop-filter ${action_pid}' terminal=true"
+        echo "▶ Kill ${action_name} (${action_pid}) | bash='$__DIR__/actions.sh top-kill ${action_pid}' terminal=true"
+        echo "▶ renice ${action_pid} | bash='$__DIR__/actions.sh top-renice ${action_pid}' terminal=true"
     fi
 }
 
@@ -203,6 +216,13 @@ widget_disk_menu() {
         color=$(color_for "$pct" "$DISK_PCT_WARN" "$DISK_PCT_CRIT")
         argos_item " $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
     done <<< "$rows"
+
+    if command -v ncdu >/dev/null 2>&1; then
+        echo "▶ ncdu /home | bash='$__DIR__/actions.sh disk-ncdu /home' terminal=true"
+        echo "▶ ncdu / | bash='$__DIR__/actions.sh disk-ncdu /' terminal=true"
+    else
+        argos_dim " ncdu not installed — apt install ncdu"
+    fi
 }
 
 # ── iowait ───────────────────────────────────────────────────
