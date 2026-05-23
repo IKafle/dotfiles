@@ -7,6 +7,7 @@
 #   disable <name>      remove the symlink
 #   reload              re-source enabled modules in current shell (use: `. <(bx reload-cmd)` or eval)
 #   edit <name>         open module in $EDITOR; reload on save
+#   read <name>         print module contents to stdout (no editor)
 #   new <name> [--tool] scaffold a new module (or tool with --tool)
 #   doctor              health check
 #   run <tool>          execute a tools/ script
@@ -203,6 +204,11 @@ USAGE
       → bx edit aliases
       → bx edit 30-functions.sh
 
+    bx read <name>               print module contents to stdout (alias: cat, show)
+      → bx read aliases
+      → bx read 30-functions.sh
+      → bx cat docker | grep -i context
+
     bx new <name> [--tool]       scaffold a new module from template
       → bx new my-helper                  # creates modules/45-my-helper.sh
       → bx new docker-cleanup --tool      # creates tools/docker-cleanup.sh
@@ -343,6 +349,17 @@ cmd_edit() {
     else
         bx_dim "no changes"
     fi
+}
+
+cmd_read() {
+    local query=${1:-}
+    if [[ -z "$query" ]]; then bx_err "usage: bx read <name>"; return 2; fi
+    local target
+    target=$(_bx_resolve_module "$query") || { bx_err "no module matches '$query'"; return 1; }
+    if [[ -t 1 ]]; then
+        printf '%s── %s ──%s\n' "${BX_C_GRAY}" "$target" "${BX_C_RESET}" >&2
+    fi
+    cat "$target"
 }
 
 cmd_new() {
@@ -935,6 +952,7 @@ case $cmd in
     disable|off)           cmd_disable "$@" ;;
     reload)                cmd_reload "$@" ;;
     edit)                  cmd_edit "$@" ;;
+    read|cat|show)         cmd_read "$@" ;;
     new)                   cmd_new "$@" ;;
     doctor|check|health)   cmd_doctor "$@" ;;
     selftest|test)         cmd_selftest "$@" ;;

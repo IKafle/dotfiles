@@ -13,6 +13,7 @@ bx enable docker  # symlink a module into enabled/ (loads on next shell)
 bx disable docker # remove the symlink
 bx reload         # re-source enabled modules in THIS shell
 bx edit aliases   # open module in $EDITOR; reload on save
+bx read aliases   # print module contents to stdout (alias: cat, show)
 bx new <name>     # scaffold a new module from template
 bx doctor         # health check: missing symlinks, failed modules, bashrc hook
 bx selftest       # full regression check (load, idempotency, guards, metadata)
