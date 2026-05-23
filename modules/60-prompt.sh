@@ -17,4 +17,10 @@ if [[ -d "$HOME/.bin/completions" ]]; then
     done
 fi
 
-export PROMPT_COMMAND='__git_ps1 "\u@\h:\w" "\\\$ "'
+# Append __git_ps1 to PROMPT_COMMAND without clobbering hooks that earlier
+# modules (cmdlog, geekbar-track) prepended. PS1 must be set last, so this
+# goes at the END of the chain.
+if [[ ";${PROMPT_COMMAND:-};" != *__git_ps1* ]]; then
+    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}"'__git_ps1 "\u@\h:\w" "\\\$ "'
+fi
+export PROMPT_COMMAND

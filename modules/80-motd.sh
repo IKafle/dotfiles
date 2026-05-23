@@ -112,6 +112,29 @@ __motd_full() {
         printf "  ${RD}${B}⚑  %d item(s) waiting in ~/vault/inbox${R}\n" "$inbox_count"
     fi
 
+    # ── Top commands in the last hour ─────────────────────────
+    if declare -F _bx_cmdlog_top >/dev/null 2>&1; then
+        local top_out
+        top_out=$(_bx_cmdlog_top 3 3600)
+        if [[ -n "$top_out" ]]; then
+            printf '\n'
+            local first=1 count cmd
+            while IFS=$'\t' read -r count cmd; do
+                [[ -z "$count" ]] && continue
+                # Trim very long lines so they don't wrap.
+                if (( ${#cmd} > 44 )); then
+                    cmd="${cmd:0:43}…"
+                fi
+                if (( first )); then
+                    printf "  ${GR}top 1h${R}  ${CY}${B}×%-3s${R}  %s\n" "$count" "$cmd"
+                    first=0
+                else
+                    printf "          ${CY}${B}×%-3s${R}  %s\n" "$count" "$cmd"
+                fi
+            done <<< "$top_out"
+        fi
+    fi
+
     # ── Shortcuts ─────────────────────────────────────────────
     printf '\n'
     printf "  %s\n" "$SEP"
