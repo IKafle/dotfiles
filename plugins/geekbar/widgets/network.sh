@@ -21,23 +21,24 @@ widget_net_menu() {
         pri_row 1 "$(chip_warn 'OFFLINE')  no network" "" false ""
         return
     fi
-    local rx_rate tx_rate rx_h tx_h local_ip n tooltip safe_iface safe_ip dot
+    local rx_rate tx_rate rx_h tx_h local_ip ssid label
+    local safe_iface safe_ip safe_label dot tooltip
     rx_rate=$(net_rate "$iface" rx)
     tx_rate=$(net_rate "$iface" tx)
     rx_h=$(human_bytes "$rx_rate")
     tx_h=$(human_bytes "$tx_rate")
     local_ip=$(cache_get "localip.$iface" "$CACHE_TTL_SLOW" \
         bash -c "ip -4 addr show '$iface' | awk '/inet / {print \$2}' | cut -d/ -f1")
-    n=$(cache_get "sock.established" 5 \
-        bash -c "ss -tnH state established 2>/dev/null | wc -l")
-    n=${n:-0}
+    [[ -z "$local_ip" ]] && local_ip="—"
+    ssid=$(cache_get "wifi.ssid" 30 \
+        bash -c "$(declare -f _wifi_ssid get_default_iface safe_cmd); _wifi_ssid")
+    if [[ -n "$ssid" ]]; then label="$ssid"; else label="$iface"; fi
     safe_iface=$(pango_escape "$iface")
-    safe_ip=$(pango_escape "${local_ip:-—}")
+    safe_ip=$(pango_escape "$local_ip")
+    safe_label=$(pango_escape "$label")
     dot="<span color=\"$COLOR_DIM\">·</span>"
-    tooltip="iface=${iface}  ip=${local_ip:-—}  rx=${rx_h}/s  tx=${tx_h}/s  est-conn=${n}"
-    pri_row 1 "󰛳 ${safe_iface}   ↓  $(printf '%9s' "${rx_h}/s")   ${dot}   ${n} conn" \
-        "$__DIR__/actions.sh net-nload ${iface}" true "$tooltip"
-    pri_row 1 "  $(printf '%-10s' '')   ↑  $(printf '%9s' "${tx_h}/s")   ${dot}   ${safe_ip}" \
+    tooltip="iface=${iface}  ip=${local_ip}  ${ssid:+ssid=${ssid}  }rx=${rx_h}/s  tx=${tx_h}/s"
+    pri_row 1 "<span color=\"$COLOR_ACCENT\">󰛳</span> ${safe_iface}   ${dot}   ${safe_ip} (${safe_label})   ${dot}   ↓${rx_h} ↑${tx_h}" \
         "$__DIR__/actions.sh net-nload ${iface}" true "$tooltip"
 }
 
@@ -100,20 +101,8 @@ widget_wifi_bar() {
 }
 
 widget_wifi_menu() {
-    local sig; sig=$(cache_get "wifi.sig" 5 bash -c "$(declare -f _wifi_signal get_default_iface safe_cmd); _wifi_signal")
-    [[ -z "$sig" ]] && return
-    local dbm bars ssid safe_ssid bars_chip
-    read -r dbm bars <<< "$sig"
-    ssid=$(cache_get "wifi.ssid" 30 \
-        bash -c "$(declare -f _wifi_ssid get_default_iface safe_cmd); _wifi_ssid")
-    [[ -z "$ssid" ]] && ssid="—"
-    safe_ssid=$(pango_escape "$ssid")
-    if   (( dbm >= -60 )); then bars_chip=$(chip_ok   "$bars")
-    elif (( dbm >= -70 )); then bars_chip=$(chip_warn "$bars")
-    else                        bars_chip=$(chip_crit "$bars")
-    fi
-    pri_row 4 "󰖩 ${safe_ssid}  ${bars_chip}" \
-        "" false "WiFi ssid=${ssid}  signal=${dbm} dBm"
+    # SSID now lives on the Network row (as "IP (ssid)"); signal stays in the bar.
+    return
 }
 
 # ─────────────────────────────────────────────────────────────
