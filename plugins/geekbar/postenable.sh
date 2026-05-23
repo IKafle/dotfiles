@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# bx-purpose: post-enable hook — currently a no-op, will run geekbar-doctor in Stage 6.
-echo "geekbar :: enabled. (tip: run 'bx run geekbar-doctor' once Stage 6 lands)" >&2
+# bx-purpose: post-enable hook — runs the doctor and prints next steps
+exec "$HOME/.bin/tools/geekbar-doctor.sh"
