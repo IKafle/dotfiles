@@ -225,18 +225,26 @@ case "$action" in
 
     # ── system / geekbar self ────────────────────────────────
     argos-restart)
-        # Argos's dbus interface name varies by extension build; if the
-        # primary call fails, try the USR1 signal and finally surface a
-        # hint about the X11-only Alt+F2 → r restart.
-        if gdbus call --session \
-            --dest com.github.p-e-w.argos \
-            --object-path /com/github/p-e-w/argos \
-            --method com.github.p-e-w.argos.Reload >/dev/null 2>&1; then
-            notify-send "geekbar" "Argos panels reloaded" 2>/dev/null
-        elif pkill -USR1 argos 2>/dev/null; then
-            notify-send "geekbar" "Argos signalled (USR1)" 2>/dev/null
+        # Argos is a gnome-shell extension, not a standalone process, so
+        # there's no DBus interface and no signal to send. The portable
+        # reload — works on both X11 and Wayland — is a disable/enable
+        # cycle via gnome-extensions(1). Fallback: touch each Argos script
+        # to force a re-run (Argos watches its scripts for mtime change).
+        ext="argos@pew.worldwidemann.com"
+        if command -v gnome-extensions >/dev/null 2>&1 \
+            && gnome-extensions info "$ext" >/dev/null 2>&1; then
+            gnome-extensions disable "$ext" 2>/dev/null
+            sleep 0.3
+            if gnome-extensions enable "$ext" 2>/dev/null; then
+                notify-send "geekbar" "Argos reloaded" 2>/dev/null
+                exit 0
+            fi
+        fi
+        if compgen -G "$HOME/.config/argos/*.sh" >/dev/null; then
+            touch "$HOME"/.config/argos/*.sh
+            notify-send "geekbar" "Argos scripts refreshed" 2>/dev/null
         else
-            notify-send "geekbar" "Couldn't reload Argos — on X11 try Alt+F2 → r" 2>/dev/null
+            notify-send "geekbar" "Couldn't reload Argos — extension not found" 2>/dev/null
         fi
         ;;
     geekbar-doctor)
