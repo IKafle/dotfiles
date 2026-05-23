@@ -16,7 +16,7 @@
 # Each widget's bar may self-suppress (return empty) when its condition is not met;
 # see widgets/<section>.sh for per-widget behavior.
 BAR_WIDGETS=(
-    uptime       # heartbeat
+    clock        # leftmost — time anchor
     git          # heartbeat — only when in/under a tracked repo
     k8s          # heartbeat — only when kubectl context configured
     cloud        # heartbeat — only when AWS/GCP/Azure profile detected
@@ -26,30 +26,38 @@ BAR_WIDGETS=(
     ram          # heartbeat (spark + used GB)
     net          # heartbeat (rx/tx) — only when an interface is up
     disk         # alarm — only when a mount's used% ≥ DISK_PCT_WARN
+    iowait       # alarm — only when %iowait ≥ IOWAIT_PCT_WARN
     top_proc     # alarm — only when CPU% or MEM% above threshold
+    apt          # alarm — only when apt updates are pending
+    battery      # alarm — laptop only; only when on battery and low
+    sshagent     # alarm — only when ssh-agent has 0 identities
     mic          # alarm — only when mic is muted
-    weather      # heartbeat — only when location available
+    # uptime     # menu-only by default
+    # weather    # menu-only by default; uncomment to add to bar
     # nepse      # opt-in: uncomment to show NEPSE during market hours
     # ports      # opt-in: bar segment showing count + listening DEV_PORTS
+    # langver    # opt-in: first detected pyenv/nvm/rbenv/jenv/goenv/tfenv version
 )
 
 # MENU_SECTIONS — top-to-bottom in the dropdown. Each maps to a widget set.
 MENU_SECTIONS=(
     context      # git, k8s, cloud, vpn — "what am I touching"
-    system       # uptime, cpu, ram, load, top_proc, disk
-    network      # net (iface/ssid/local-ip/public-ip/rates)
-    dev          # docker, ports
+    system       # uptime, cpu, ram, load, top_proc, disk, iowait, battery
+    network      # net (iface/ssid/local-ip/public-ip/rates), wifi, dns, sock
+    dev          # docker, ports, sshagent, langver
     audio        # vol, mic
-    extras       # weather, nepse
+    updates      # apt
+    extras       # clock (extra TZs), weather, nepse
 )
 
 # Per-section widget membership (used by the menu loop).
 MENU_SECTION_context=(git k8s cloud vpn)
-MENU_SECTION_system=(uptime cpu ram load top_proc disk)
-MENU_SECTION_network=(net)
-MENU_SECTION_dev=(docker ports)
+MENU_SECTION_system=(uptime cpu ram load top_proc disk iowait battery)
+MENU_SECTION_network=(net wifi dns sock)
+MENU_SECTION_dev=(docker ports sshagent langver)
 MENU_SECTION_audio=(vol mic)
-MENU_SECTION_extras=(weather)
+MENU_SECTION_updates=(apt)
+MENU_SECTION_extras=(clock weather)
 
 # ── weather location override ────────────────────────────────
 # Leave empty for auto-detect via IP geolocation.
@@ -67,10 +75,28 @@ RAM_PCT_CRIT=92
 DISK_PCT_WARN=80          # %  — alarm when any tracked mount used% ≥ this
 DISK_PCT_CRIT=92          # %  — critical (bar shows "!" prefix)
 
+IOWAIT_PCT_WARN=10        # %  — alarm threshold
+IOWAIT_PCT_CRIT=25        # %  — critical
+
+BATTERY_PCT_WARN=30       # %  — alarm when on battery and below this
+BATTERY_PCT_CRIT=15       # %  — critical
+
 # Load average threshold is expressed as a multiplier of core count.
 # On an 8-core machine, LOAD_WARN_MULT=0.8 means warn at load >= 6.4
 LOAD_WARN_MULT="0.8"
 LOAD_CRIT_MULT="1.2"
+
+# ── clock ────────────────────────────────────────────────────
+# Bar format follows date(1). Default: short weekday + 24h time.
+CLOCK_BAR_FORMAT="+%a %H:%M"
+
+# Extra timezones shown in the dropdown's Extras section.
+# Format: "Label/IANA-tz" pairs. Example pairs:
+#   "UTC/UTC", "NYC/America/New_York", "SF/America/Los_Angeles",
+#   "London/Europe/London", "Tokyo/Asia/Tokyo", "Berlin/Europe/Berlin"
+CLOCK_EXTRA_TZS=(
+    "UTC/UTC"
+)
 
 # ── k8s danger context ───────────────────────────────────────
 # Regex matched against the kubectl context name. When it matches,

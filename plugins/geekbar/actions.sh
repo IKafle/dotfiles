@@ -105,6 +105,32 @@ case "$action" in
     ports-prompt)
         run_in_term 'read -rp "Port number: " p; [[ -z "$p" ]] && exit 0; echo; ss -tlnp "sport = :$p" 2>/dev/null || ss -tlnp | grep -E ":$p[[:space:]]"'
         ;;
+    ssh-add)
+        run_in_term "ssh-add"
+        ;;
+    ssh-add-list)
+        run_in_term "ssh-add -L"
+        ;;
+    dns-status)
+        run_in_term "resolvectl status | less -S"
+        ;;
+    dns-flush)
+        run_in_term "sudo resolvectl flush-caches && echo 'DNS cache flushed.'"
+        ;;
+    apt-list)
+        run_in_term "apt list --upgradable 2>/dev/null"
+        ;;
+    apt-upgrade)
+        run_in_term "sudo apt update && sudo apt upgrade"
+        ;;
+    apt-security)
+        run_in_term "apt list --upgradable 2>/dev/null | grep -- '-security/'"
+        ;;
+    apt-refresh)
+        rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/geekbar/apt.count" \
+              "${XDG_CACHE_HOME:-$HOME/.cache}/geekbar/apt.security"
+        notify-send "geekbar" "apt cache cleared — refreshing on next tick" 2>/dev/null
+        ;;
     open-url)
         xdg-open "$1" >/dev/null 2>&1 &
         ;;
