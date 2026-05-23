@@ -169,7 +169,9 @@ print clear progress. They MUST start with:
 
 Drop the completion script into `~/.bin/completions/`. The `60-prompt.sh`
 module sources every file in that directory automatically. No
-registration needed.
+registration needed. `~/.bin/completions/bx` already provides smart
+completion for the CLI (subcommands, enabled/disabled module names,
+tool names, plugin names) — extend it if you add a new subcommand.
 
 ### Adding a plugin (customization that lives outside ~/.bin/)
 
@@ -276,6 +278,7 @@ bx reload                # re-source enabled modules in current shell
 bx edit <name>           # $EDITOR a module
 bx new <name> [--tool]   # scaffold
 bx doctor                # health check
+bx selftest              # regression check (load, guards, tool/plugin metadata)
 bx run <tool>            # execute a tool
 bx tools                 # list tools
 bx install               # idempotently add source line to ~/.bashrc

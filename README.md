@@ -15,6 +15,7 @@ bx reload         # re-source enabled modules in THIS shell
 bx edit aliases   # open module in $EDITOR; reload on save
 bx new <name>     # scaffold a new module from template
 bx doctor         # health check: missing symlinks, failed modules, bashrc hook
+bx selftest       # full regression check (load, idempotency, guards, metadata)
 bx run <tool>     # run a one-shot tool from tools/  (e.g. bx run docker-init)
 bx tools          # list available tools
 bx plugin ls      # list plugins (external customizations like Argos scripts)

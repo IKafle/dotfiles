@@ -1,0 +1,130 @@
+# bash completion for the bx CLI
+# Sourced by ~/.bin/modules/60-prompt.sh on every interactive shell.
+
+_bx_complete() {
+    local cur prev cword words
+    _init_completion 2>/dev/null || {
+        # Minimal fallback if bash-completion isn't installed.
+        COMPREPLY=()
+        cur="${COMP_WORDS[COMP_CWORD]}"
+        prev="${COMP_WORDS[COMP_CWORD-1]}"
+        cword=$COMP_CWORD
+        words=("${COMP_WORDS[@]}")
+    }
+
+    local bx_home="${BX_HOME:-$HOME/.bin}"
+    local subcmds="status ls enable disable reload edit new doctor run tools install plugin selftest help"
+    local plugin_subcmds="ls enable disable new doctor"
+
+    # Top-level subcommand completion
+    if (( cword == 1 )); then
+        COMPREPLY=( $(compgen -W "$subcmds" -- "$cur") )
+        return 0
+    fi
+
+    local cmd="${words[1]}"
+
+    # Helpers — emit short names (no NN- prefix, no .sh suffix)
+    _bx_complete_all_modules() {
+        local f name
+        for f in "$bx_home"/modules/*.sh; do
+            [[ -e "$f" ]] || continue
+            name=$(basename "$f" .sh)
+            name="${name#[0-9][0-9]-}"
+            printf '%s\n' "$name"
+        done
+    }
+
+    _bx_complete_enabled_modules() {
+        local f name
+        for f in "$bx_home"/enabled/*.sh; do
+            [[ -e "$f" ]] || continue
+            name=$(basename "$f" .sh)
+            name="${name#[0-9][0-9]-}"
+            printf '%s\n' "$name"
+        done
+    }
+
+    _bx_complete_disabled_modules() {
+        local enabled disabled
+        enabled=$(_bx_complete_enabled_modules)
+        comm -23 <(_bx_complete_all_modules | sort) <(printf '%s\n' "$enabled" | sort)
+    }
+
+    _bx_complete_tools() {
+        local f
+        for f in "$bx_home"/tools/*.sh; do
+            [[ -e "$f" ]] || continue
+            basename "$f" .sh
+        done
+    }
+
+    _bx_complete_plugins_all() {
+        local f name
+        for f in "$bx_home"/plugins/*.sh; do
+            [[ -e "$f" ]] || continue
+            name=$(basename "$f")
+            # strip .<kind>.sh suffix → name only
+            printf '%s\n' "${name%%.*}"
+        done
+    }
+
+    _bx_complete_plugins_enabled() {
+        local f name
+        for f in "$bx_home"/enabled-plugins/*; do
+            [[ -e "$f" ]] || continue
+            name=$(basename "$f")
+            printf '%s\n' "${name%%.*}"
+        done
+    }
+
+    _bx_complete_plugins_disabled() {
+        comm -23 <(_bx_complete_plugins_all | sort -u) <(_bx_complete_plugins_enabled | sort -u)
+    }
+
+    case $cmd in
+        enable|on)
+            COMPREPLY=( $(compgen -W "$(_bx_complete_disabled_modules)" -- "$cur") )
+            ;;
+        disable|off)
+            COMPREPLY=( $(compgen -W "$(_bx_complete_enabled_modules)" -- "$cur") )
+            ;;
+        edit)
+            COMPREPLY=( $(compgen -W "$(_bx_complete_all_modules)" -- "$cur") )
+            ;;
+        run|exec)
+            COMPREPLY=( $(compgen -W "$(_bx_complete_tools)" -- "$cur") )
+            ;;
+        new)
+            # If the user is typing the second arg, suggest --tool flag
+            if (( cword == 3 )); then
+                COMPREPLY=( $(compgen -W "--tool" -- "$cur") )
+            fi
+            ;;
+        plugin|plugins)
+            if (( cword == 2 )); then
+                COMPREPLY=( $(compgen -W "$plugin_subcmds" -- "$cur") )
+            else
+                local psub="${words[2]}"
+                case $psub in
+                    enable)
+                        COMPREPLY=( $(compgen -W "$(_bx_complete_plugins_disabled)" -- "$cur") )
+                        ;;
+                    disable)
+                        COMPREPLY=( $(compgen -W "$(_bx_complete_plugins_enabled)" -- "$cur") )
+                        ;;
+                    new)
+                        if [[ "$prev" == "--kind" ]]; then
+                            COMPREPLY=( $(compgen -W "argos" -- "$cur") )
+                        elif (( cword >= 4 )); then
+                            COMPREPLY=( $(compgen -W "--kind" -- "$cur") )
+                        fi
+                        ;;
+                esac
+            fi
+            ;;
+    esac
+    return 0
+}
+
+complete -F _bx_complete bx

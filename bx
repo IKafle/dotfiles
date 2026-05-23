@@ -176,6 +176,9 @@ USAGE
     bx doctor                    health check
       → bx doctor
 
+    bx selftest                  full regression check (load, guards, metadata)
+      → bx selftest
+
     bx run <tool>                execute a script in tools/
       → bx run docker-init
       → bx run vault-init -- --dry-run    # extra args after --
@@ -434,6 +437,94 @@ cmd_doctor() {
         return 0
     else
         bx_warn "$issues issue(s) found"
+        return 1
+    fi
+}
+
+cmd_selftest() {
+    local fails=0 pass
+
+    bx_info "bx selftest — full regression check"
+    echo >&2
+
+    _bx_st_ok() { bx_ok "$1"; }
+    _bx_st_fail() { bx_err "$1"; fails=$(( fails + 1 )); }
+
+    # 1. Subshell load — modules source cleanly with no failures.
+    local out
+    out=$(bash -c '. "'"$BX_HOME"'"/init.sh && echo "$BX_MODULES_LOADED|${BX_MODULES_FAILED:-}"' 2>&1)
+    local loaded="${out%%|*}" failed="${out#*|}"
+    if [[ "$loaded" =~ ^[0-9]+$ ]] && (( loaded > 0 )) && [[ -z "$failed" ]]; then
+        _bx_st_ok "subshell load: $loaded modules, no failures"
+    else
+        _bx_st_fail "subshell load broken: $out"
+    fi
+
+    # 2. Double-source idempotency — BX_VERSION guard returns 0 on second source.
+    if bash -c '. "'"$BX_HOME"'"/init.sh; . "'"$BX_HOME"'"/init.sh' >/dev/null 2>&1; then
+        _bx_st_ok "double-source is idempotent"
+    else
+        _bx_st_fail "double-source errors"
+    fi
+
+    # 3. Every module has the _BX_MOD_*_LOADED guard (CLAUDE.md rule #3).
+    local missing_guards=()
+    local f
+    shopt -s nullglob
+    for f in "$BX_HOME"/modules/*.sh; do
+        grep -q "_BX_MOD_[A-Za-z0-9_]*_LOADED" "$f" || missing_guards+=("$(basename "$f")")
+    done
+    shopt -u nullglob
+    if (( ${#missing_guards[@]} == 0 )); then
+        _bx_st_ok "all modules have load guards"
+    else
+        _bx_st_fail "modules missing _BX_MOD_*_LOADED guard: ${missing_guards[*]}"
+    fi
+
+    # 4. Every tool declares # bx-purpose: (so `bx tools` can describe it).
+    local missing_purpose=()
+    shopt -s nullglob
+    for f in "$BX_HOME"/tools/*.sh; do
+        grep -q "^# bx-purpose:" "$f" || missing_purpose+=("$(basename "$f")")
+    done
+    shopt -u nullglob
+    if (( ${#missing_purpose[@]} == 0 )); then
+        _bx_st_ok "all tools declare # bx-purpose:"
+    else
+        _bx_st_fail "tools missing # bx-purpose: ${missing_purpose[*]}"
+    fi
+
+    # 5. Every plugin has the three required headers.
+    local missing_plugin_meta=()
+    shopt -s nullglob
+    for f in "$BX_HOME"/plugins/*.sh; do
+        if ! grep -q "^# bx-purpose:" "$f" \
+            || ! grep -q "^# bx-plugin-kind:" "$f" \
+            || ! grep -q "^# bx-plugin-target:" "$f"; then
+            missing_plugin_meta+=("$(basename "$f")")
+        fi
+    done
+    shopt -u nullglob
+    if (( ${#missing_plugin_meta[@]} == 0 )); then
+        _bx_st_ok "all plugins have required metadata"
+    else
+        _bx_st_fail "plugins missing metadata: ${missing_plugin_meta[*]}"
+    fi
+
+    # 6. bx doctor (delegated — covers bashrc hook, PATH, broken symlinks, etc.)
+    if cmd_doctor >/dev/null 2>&1; then
+        _bx_st_ok "bx doctor passes"
+    else
+        _bx_st_fail "bx doctor reports issues — run \`bx doctor\` for detail"
+    fi
+
+    unset -f _bx_st_ok _bx_st_fail
+    echo >&2
+    if (( fails == 0 )); then
+        bx_ok "selftest: all checks passed"
+        return 0
+    else
+        bx_err "selftest: $fails check(s) failed"
         return 1
     fi
 }
@@ -706,6 +797,7 @@ case $cmd in
     edit)                  cmd_edit "$@" ;;
     new)                   cmd_new "$@" ;;
     doctor|check|health)   cmd_doctor "$@" ;;
+    selftest|test)         cmd_selftest "$@" ;;
     run|exec)              cmd_run "$@" ;;
     tools)                 cmd_tools "$@" ;;
     install)               cmd_install "$@" ;;
