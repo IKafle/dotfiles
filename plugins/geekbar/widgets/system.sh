@@ -11,52 +11,63 @@ widget_uptime_bar() {
 }
 
 widget_uptime_menu() {
-    local sec; sec=$(awk '{print int($1)}' /proc/uptime)
-    local kernel; kernel=$(cache_get kernel "$CACHE_TTL_COLD" uname -r)
-    argos_item " Uptime      $(human_duration "$sec")"
-    argos_item "--   kernel $kernel" "$COLOR_DIM"
+    # Menu-only signal of low value — GNOME shows wall time; uptime is
+    # rarely actionable. Suppress; users can bring it back by editing.
+    return
 }
 
 # ── cpu ──────────────────────────────────────────────────────
 widget_cpu_bar() {
-    local t; t=$(cpu_temp)
-    local bucket="ok"
+    local t usage bucket="ok"
+    t=$(cpu_temp)
+    usage=$(cpu_usage_pct)
     if   (( t >= CPU_TEMP_CRIT )); then bucket="crit"
     elif (( t >= CPU_TEMP_WARN )); then bucket="warn"
     fi
-    local usage; usage=$(cpu_usage_pct)
     notify_edge cpu "$bucket" "🔥 CPU $bucket" "${t}°C — ${usage}% load"
-    printf ' %s%% %s°' "$usage" "$t"
+    printf '%s %s %s' \
+        "$(bar_icon "")" \
+        "$(bar_val "${usage}%" "$(bar_thr "$usage" 50 80)")" \
+        "$(bar_val "${t}°" "$(bar_thr "$t" "$CPU_TEMP_WARN" "$CPU_TEMP_CRIT")")"
 }
 
 widget_cpu_menu() {
-    local temp freq ghz usage color
+    local temp freq ghz usage gauge_str tooltip danger="" dot
     temp=$(cpu_temp)
     freq=$(cpu_freq_mhz)
     ghz=$(awk -v m="$freq" 'BEGIN { printf "%.1f", m/1000 }')
     usage=$(cpu_usage_pct)
-    color=$(color_for "$temp" "$CPU_TEMP_WARN" "$CPU_TEMP_CRIT")
-    argos_item " CPU         ${ghz}GHz · ${temp}°C · ${usage}%" "$color"
+    [[ "$usage" =~ ^[0-9]+$ ]] || usage=0
+    gauge_str=$(gauge "$usage" 8 50 80)
+    dot="<span color=\"$COLOR_DIM\">·</span>"
+    (( temp >= CPU_TEMP_CRIT )) && danger="   $(chip_crit HOT)"
+    tooltip="CPU usage=${usage}%  temp=${temp}°C  freq=${ghz}GHz"
+    pri_row 1 " CPU   ${gauge_str}   $(printf '%3s' "${usage}")%   ${dot}   ${temp}°C${danger}" \
+        "$__DIR__/actions.sh open-htop" true "$tooltip"
 }
 
 # ── ram ──────────────────────────────────────────────────────
 widget_ram_bar() {
-    local pct used total spark
+    local pct used total bucket="ok"
     read -r pct used total < <(ram_info)
-    local bucket="ok"
     if   (( pct >= RAM_PCT_CRIT )); then bucket="crit"
     elif (( pct >= RAM_PCT_WARN )); then bucket="warn"
     fi
     notify_edge ram "$bucket" "🧠 RAM $bucket" "${pct}% used (${used} / ${total} GB)"
-    spark=$(sparkline "$pct" 4 ram)
-    printf '%s %sG' "$spark" "$used"
+    printf '%s %s' \
+        "$(bar_icon "")" \
+        "$(bar_val "${used}G" "$(bar_thr "$pct" "$RAM_PCT_WARN" "$RAM_PCT_CRIT")")"
 }
 
 widget_ram_menu() {
-    local pct used total color
+    local pct used total gauge_str tooltip dot
     read -r pct used total < <(ram_info)
-    color=$(color_for "$pct" "$RAM_PCT_WARN" "$RAM_PCT_CRIT")
-    argos_item " RAM         ${used}G / ${total}G  (${pct}%)" "$color"
+    [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+    gauge_str=$(gauge "$pct" 8 "$RAM_PCT_WARN" "$RAM_PCT_CRIT")
+    dot="<span color=\"$COLOR_DIM\">·</span>"
+    tooltip="RAM used=${used}G total=${total}G (${pct}%)"
+    pri_row 1 " RAM   ${gauge_str}   $(printf '%3s' "${pct}")%   ${dot}   ${used}G / ${total}G" \
+        "$__DIR__/actions.sh open-htop" true "$tooltip"
 }
 
 # ── load ─────────────────────────────────────────────────────
@@ -64,10 +75,21 @@ widget_ram_menu() {
 widget_load_bar() { :; }
 
 widget_load_menu() {
-    local l1 l5 l15 _ cores
-    read -r l1 l5 l15 _ < /proc/loadavg
+    # Only render when load exceeds the warn threshold; otherwise hidden.
+    local l1 _ cores warn crit chip_label tooltip
+    read -r l1 _ < /proc/loadavg
     cores=$(nproc)
-    argos_item "󰖶 Load        ${l1}  ${l5}  ${l15}  (${cores} cores)"
+    warn=$(awk -v c="$cores" -v m="${LOAD_WARN_MULT:-0.8}" 'BEGIN { printf "%.2f", c*m }')
+    crit=$(awk -v c="$cores" -v m="${LOAD_CRIT_MULT:-1.2}" 'BEGIN { printf "%.2f", c*m }')
+    awk -v l="$l1" -v w="$warn" 'BEGIN { exit !(l+0 >= w+0) }' || return
+    if awk -v l="$l1" -v c="$crit" 'BEGIN { exit !(l+0 >= c+0) }'; then
+        chip_label=$(chip_crit "LOAD ${l1}")
+    else
+        chip_label=$(chip_warn "LOAD ${l1}")
+    fi
+    tooltip="Load avg=${l1}  cores=${cores}  warn=${warn}  crit=${crit}"
+    pri_row 4 "${chip_label}  ${cores} cores" \
+        "$__DIR__/actions.sh open-htop" true "$tooltip"
 }
 
 # ── top_proc ─────────────────────────────────────────────────
@@ -104,38 +126,32 @@ widget_top_proc_bar() {
 
     [[ -z "$bar_name" ]] && return
     short="${bar_name:0:10}"
-    if [[ "$kind" == "CPU" ]]; then
-        printf '󰓅 %s %s%%' "$short" "$bar_pct"
-    else
-        printf ' %s %s%%' "$short" "$bar_pct"
-    fi
+    local safe icon
+    safe=$(pango_escape "$short")
+    if [[ "$kind" == "CPU" ]]; then icon="󰓅"; else icon=""; fi
+    printf '%s %s %s' \
+        "$(bar_icon "$icon")" \
+        "$safe" \
+        "$(bar_val "${bar_pct}%" "$(bar_thr "$bar_pct" 50 80)")"
 }
 
 widget_top_proc_menu() {
-    local raw name pid cpu mem args
-    local action_pid="" action_name=""
+    # One row showing the worst CPU offender; click opens htop filtered
+    # to that PID. MEM is dropped — bar already alarms on heavy procs.
+    local raw name pid cpu mem args safe_name cpu_int chip_label tooltip
     raw=$(top_cpu_proc)
-    if [[ -n "$raw" ]]; then
-        IFS='|' read -r name pid cpu mem args <<< "$raw"
-        argos_item "󰓅 Top CPU     ${name} (${cpu}%) pid=${pid}"
-        action_pid="$pid"
-        action_name="$name"
+    [[ -z "$raw" ]] && return
+    IFS='|' read -r name pid cpu mem args <<< "$raw"
+    safe_name=$(pango_escape "$name")
+    cpu_int=$(printf '%.0f' "${cpu:-0}")
+    if (( cpu_int >= 200 )); then
+        chip_label=$(chip_crit "${cpu_int}%")
+    else
+        chip_label=$(chip_warn "${cpu_int}%")
     fi
-    raw=$(top_mem_proc)
-    if [[ -n "$raw" ]]; then
-        IFS='|' read -r name pid cpu mem args <<< "$raw"
-        argos_item " Top MEM     ${name} (${mem}%) pid=${pid}"
-        # Prefer the CPU offender for click actions; fall back to MEM if no CPU row.
-        if [[ -z "$action_pid" ]]; then
-            action_pid="$pid"
-            action_name="$name"
-        fi
-    fi
-    if [[ -n "$action_pid" ]]; then
-        echo "--▶ htop -p ${action_pid} | bash='$__DIR__/actions.sh htop-filter ${action_pid}' terminal=true"
-        echo "--▶ Kill ${action_name} (${action_pid}) | bash='$__DIR__/actions.sh top-kill ${action_pid}' terminal=true"
-        echo "--▶ renice ${action_pid} | bash='$__DIR__/actions.sh top-renice ${action_pid}' terminal=true"
-    fi
+    tooltip="Top CPU process: name=${name} pid=${pid} cpu=${cpu}% mem=${mem}%"
+    pri_row 2 "󰓅 ${safe_name} ${chip_label}  pid=${pid}" \
+        "$__DIR__/actions.sh htop-filter ${pid}" true "$tooltip"
 }
 
 # ── disk ─────────────────────────────────────────────────────
@@ -192,36 +208,43 @@ widget_disk_bar() {
 }
 
 widget_disk_menu() {
-    local raw rows mount used size pct color used_b size_b used_h size_h
+    # One row for the worst (fullest) tracked mount. Click → ncdu if installed.
+    local raw mount used size pct worst_mount="" worst_pct=0 worst_used=0 worst_size=0
     raw=$(_disk_raw)
     [[ -z "$raw" ]] && return
-    rows=$(printf "%s\n" "$raw" | sort -k4 -n -r)
-    local first=1
     while read -r mount used size pct; do
         [[ -z "$mount" ]] && continue
-        used_b=$(( used * 1024 ))
-        size_b=$(( size * 1024 ))
-        used_h=$(human_bytes "$used_b")
-        size_h=$(human_bytes "$size_b")
-        color=$(color_for "$pct" "$DISK_PCT_WARN" "$DISK_PCT_CRIT")
-        if (( first )); then
-            argos_item " $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
-            first=0
-        else
-            argos_item "-- $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
+        if (( pct > worst_pct )); then
+            worst_pct=$pct
+            worst_mount=$mount
+            worst_used=$used
+            worst_size=$size
         fi
-    done <<< "$rows"
-
+    done <<< "$raw"
+    [[ -z "$worst_mount" ]] && return
+    local used_h size_h gauge_str safe_mount tooltip action=""
+    used_h=$(human_bytes "$(( worst_used * 1024 ))")
+    size_h=$(human_bytes "$(( worst_size * 1024 ))")
+    gauge_str=$(gauge "$worst_pct" 8 "$DISK_PCT_WARN" "$DISK_PCT_CRIT")
+    safe_mount=$(pango_escape "$worst_mount")
+    tooltip="Disk worst-mount=${worst_mount}  used=${used_h}  total=${size_h}  pct=${worst_pct}%"
     if command -v ncdu >/dev/null 2>&1; then
-        echo "--▶ ncdu /home | bash='$__DIR__/actions.sh disk-ncdu /home' terminal=true"
-        echo "--▶ ncdu / | bash='$__DIR__/actions.sh disk-ncdu /' terminal=true"
+        action="$__DIR__/actions.sh disk-ncdu ${worst_mount}"
     fi
+    local dot="<span color=\"$COLOR_DIM\">·</span>"
+    pri_row 1 " $(printf '%-3s' "${safe_mount}")  ${gauge_str}   $(printf '%3s' "${worst_pct}")%   ${dot}   ${used_h} / ${size_h}" \
+        "$action" true "$tooltip"
 }
 
 # ── iowait ───────────────────────────────────────────────────
 # Returns "<pct>" between two /proc/stat samples, or empty on first
 # call (no baseline). State persists across argos refreshes.
 _iowait_pct() {
+    local cached
+    if cached=$(_gb_memo_get iowait_pct); then
+        printf '%s' "$cached"
+        return
+    fi
     local f="$GB_STATE_DIR/iowait.stat"
     local line; line=$(head -n1 /proc/stat)
     local vals
@@ -230,17 +253,21 @@ _iowait_pct() {
     local total=0 v
     for v in "${vals[@]:1}"; do total=$(( total + v )); done
 
+    local result=""
     if [[ -f "$f" ]]; then
         local prev_io prev_total
         read -r prev_io prev_total < "$f"
         local d_io=$(( iowait - prev_io ))
         local d_total=$(( total - prev_total ))
-        echo "$iowait $total" > "$f"
-        (( d_total <= 0 )) && { printf "0.0"; return; }
-        awk -v i="$d_io" -v t="$d_total" 'BEGIN { printf "%.1f", (i/t) * 100 }'
-    else
-        echo "$iowait $total" > "$f"
+        if (( d_total <= 0 )); then
+            result="0.0"
+        else
+            result=$(awk -v i="$d_io" -v t="$d_total" 'BEGIN { printf "%.1f", (i/t) * 100 }')
+        fi
     fi
+    echo "$iowait $total" > "$f"
+    _gb_memo_set iowait_pct "$result"
+    printf '%s' "$result"
 }
 
 widget_iowait_bar() {
@@ -258,14 +285,19 @@ widget_iowait_bar() {
 }
 
 widget_iowait_menu() {
-    local pct color
+    # Only render when iowait exceeds the warn threshold.
+    local pct chip_label rounded
     pct=$(_iowait_pct)
-    if [[ -z "$pct" ]]; then
-        argos_dim "󰋊 I/O wait    —"
-        return
+    [[ -z "$pct" ]] && return
+    awk -v p="$pct" -v w="${IOWAIT_PCT_WARN:-10}" 'BEGIN { exit !(p+0 >= w+0) }' || return
+    rounded=$(printf '%.0f' "$pct")
+    if awk -v p="$pct" -v c="${IOWAIT_PCT_CRIT:-25}" 'BEGIN { exit !(p+0 >= c+0) }'; then
+        chip_label=$(chip_crit "IO ${rounded}%")
+    else
+        chip_label=$(chip_warn "IO ${rounded}%")
     fi
-    color=$(color_for "$pct" "$IOWAIT_PCT_WARN" "$IOWAIT_PCT_CRIT")
-    argos_item "$(printf '󰋊 I/O wait    %s%%' "$pct")" "$color"
+    pri_row 2 "󰋊 I/O wait  ${chip_label}" \
+        "" false "iowait=${pct}%  warn=${IOWAIT_PCT_WARN}  crit=${IOWAIT_PCT_CRIT}"
 }
 
 # ── battery ──────────────────────────────────────────────────
@@ -308,10 +340,20 @@ widget_battery_bar() {
 widget_battery_menu() {
     local d; d=$(_battery_dir)
     [[ -z "$d" ]] && return
-    local pct status color
+    local pct status chip_label
     pct=$(cat "$d/capacity" 2>/dev/null) || return
     status=$(cat "$d/status" 2>/dev/null) || return
-    # Battery semantics are inverted (high=ok, low=bad); flip for color_for.
-    color=$(color_for $(( 100 - pct )) $(( 100 - BATTERY_PCT_WARN )) $(( 100 - BATTERY_PCT_CRIT )))
-    argos_item "$(printf '󰁾 Battery     %d%%  ·  %s' "$pct" "$status")" "$color"
+    # On AC and charged → suppress (top bar already shows the charge icon).
+    case "$status" in
+        Charging|Full)
+            (( pct >= BATTERY_PCT_WARN )) && return
+            ;;
+    esac
+    if (( pct < BATTERY_PCT_CRIT )); then
+        chip_label=$(chip_crit "${pct}%")
+    else
+        chip_label=$(chip_warn "${pct}%")
+    fi
+    pri_row 4 "󰁾 Battery  ${chip_label}  ${status}" \
+        "" false "Battery pct=${pct}%  status=${status}  warn=${BATTERY_PCT_WARN}  crit=${BATTERY_PCT_CRIT}"
 }

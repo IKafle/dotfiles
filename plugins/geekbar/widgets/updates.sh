@@ -34,16 +34,16 @@ widget_apt_bar() {
     (( count == 0 )) && return
 
     if (( sec > 0 )); then
-        printf '! 󰚰 %d (%d sec)' "$count" "$sec"
+        printf '%s %d  %s' "$(bar_icon "󰚰")" "$count" "$(chip_crit "sec ${sec}")"
     else
-        printf '󰚰 %d' "$count"
+        printf '%s %d' "$(bar_icon "󰚰")" "$count"
     fi
 }
 
 widget_apt_menu() {
     command -v apt >/dev/null 2>&1 || return
 
-    local count sec color
+    local count sec sec_chip="" count_color
     count=$(cache_get apt.count 3600 _apt_count)
     sec=$(cache_get apt.security 3600 _apt_security_count)
     count="${count:-0}"
@@ -52,14 +52,11 @@ widget_apt_menu() {
     (( count == 0 )) && return
 
     if (( sec > 0 )); then
-        color="$COLOR_CRIT"
+        count_color="$COLOR_CRIT"
+        sec_chip="  $(chip_crit "${sec} sec")"
     else
-        color="$COLOR_WARN"
+        count_color="$COLOR_WARN"
     fi
-    argos_item "$(printf '󰚰 Updates     %d pending  (%d security)' "$count" "$sec")" "$color"
-
-    echo "--▶ Show upgradable | bash='$__DIR__/actions.sh apt-list' terminal=true"
-    echo "--▶ apt upgrade (interactive) | bash='$__DIR__/actions.sh apt-upgrade' terminal=true"
-    echo "--▶ Security only | bash='$__DIR__/actions.sh apt-security' terminal=true"
-    echo "--▶ Refresh now | bash='$__DIR__/actions.sh apt-refresh' terminal=false"
+    pri_row 2 "<span color=\"$count_color\">󰚰 ${count} updates</span>${sec_chip}" \
+        "$__DIR__/actions.sh apt-upgrade" true "apt: ${count} pending (${sec} security)"
 }

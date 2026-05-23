@@ -5,40 +5,40 @@
 # ─────────────────────────────────────────────────────────────
 
 widget_net_bar() {
-    local iface; iface=$(get_default_iface)
+    local iface rx_rate tx_rate rx_h tx_h
+    iface=$(get_default_iface)
     [[ -z "$iface" ]] && return
-    local rx_rate tx_rate rx_h tx_h
     rx_rate=$(net_rate "$iface" rx)
     tx_rate=$(net_rate "$iface" tx)
     rx_h=$(human_bytes "$rx_rate")
     tx_h=$(human_bytes "$tx_rate")
-    printf ' ↓%s ↑%s' "$rx_h" "$tx_h"
+    printf '%s ↓%s ↑%s' "$(bar_icon "")" "$rx_h" "$tx_h"
 }
 
 widget_net_menu() {
     local iface; iface=$(get_default_iface)
     if [[ -z "$iface" ]]; then
-        argos_item " No network" "$COLOR_WARN"
+        pri_row 1 "$(chip_warn 'OFFLINE')  no network" "" false ""
         return
     fi
-    local rx_rate tx_rate rx_h tx_h local_ip ssid public_ip
+    local rx_rate tx_rate rx_h tx_h local_ip n tooltip safe_iface safe_ip dot
     rx_rate=$(net_rate "$iface" rx)
     tx_rate=$(net_rate "$iface" tx)
     rx_h=$(human_bytes "$rx_rate")
     tx_h=$(human_bytes "$tx_rate")
     local_ip=$(cache_get "localip.$iface" "$CACHE_TTL_SLOW" \
         bash -c "ip -4 addr show '$iface' | awk '/inet / {print \$2}' | cut -d/ -f1")
-    ssid=$(cache_get "ssid.$iface" "$CACHE_TTL_LAZY" \
-        bash -c "iwgetid -r 2>/dev/null || true")
-    public_ip=$(cache_get publicip "$CACHE_TTL_COLD" \
-        bash -c "curl -fsS --max-time 3 https://ifconfig.me 2>/dev/null || echo '—'")
-
-    argos_item "󰛳 Interface   $iface"
-    [[ -n "$ssid"     ]] && argos_item "󰖩 SSID        $ssid"
-    [[ -n "$local_ip" ]] && argos_item " Local IP    $local_ip"
-    argos_item " Public IP   $public_ip"
-    argos_item " Download    $rx_h/s"
-    argos_item " Upload      $tx_h/s"
+    n=$(cache_get "sock.established" 5 \
+        bash -c "ss -tnH state established 2>/dev/null | wc -l")
+    n=${n:-0}
+    safe_iface=$(pango_escape "$iface")
+    safe_ip=$(pango_escape "${local_ip:-—}")
+    dot="<span color=\"$COLOR_DIM\">·</span>"
+    tooltip="iface=${iface}  ip=${local_ip:-—}  rx=${rx_h}/s  tx=${tx_h}/s  est-conn=${n}"
+    pri_row 1 "󰛳 ${safe_iface}   ↓  $(printf '%9s' "${rx_h}/s")   ${dot}   ${n} conn" \
+        "$__DIR__/actions.sh net-nload ${iface}" true "$tooltip"
+    pri_row 1 "  $(printf '%-10s' '')   ↑  $(printf '%9s' "${tx_h}/s")   ${dot}   ${safe_ip}" \
+        "$__DIR__/actions.sh net-nload ${iface}" true "$tooltip"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -87,28 +87,33 @@ _wifi_ssid() {
 }
 
 widget_wifi_bar() {
-    local sig; sig=$(cache_get "wifi.sig" 5 bash -c "$(declare -f _wifi_signal get_default_iface safe_cmd); _wifi_signal")
+    local sig dbm bars color=""
+    sig=$(cache_get "wifi.sig" 5 bash -c "$(declare -f _wifi_signal get_default_iface safe_cmd); _wifi_signal")
     [[ -z "$sig" ]] && return
-    local dbm bars
     read -r dbm bars <<< "$sig"
+    if   (( dbm >= -60 )); then color=""
+    elif (( dbm >= -70 )); then color="$COLOR_WARN"
+    else                        color="$COLOR_CRIT"
+    fi
     # SSID stays in the menu — bar keeps width tight with signal-only.
-    printf ' %s' "$bars"
+    printf '%s %s' "$(bar_icon "󰖩")" "$(bar_val "$bars" "$color")"
 }
 
 widget_wifi_menu() {
     local sig; sig=$(cache_get "wifi.sig" 5 bash -c "$(declare -f _wifi_signal get_default_iface safe_cmd); _wifi_signal")
     [[ -z "$sig" ]] && return
-    local dbm bars ssid color
+    local dbm bars ssid safe_ssid bars_chip
     read -r dbm bars <<< "$sig"
     ssid=$(cache_get "wifi.ssid" 30 \
         bash -c "$(declare -f _wifi_ssid get_default_iface safe_cmd); _wifi_ssid")
     [[ -z "$ssid" ]] && ssid="—"
-    # Custom interval colors: higher (less-negative) dBm is better.
-    if   (( dbm >= -60 )); then color="$COLOR_OK"
-    elif (( dbm >= -70 )); then color="$COLOR_WARN"
-    else                        color="$COLOR_CRIT"
+    safe_ssid=$(pango_escape "$ssid")
+    if   (( dbm >= -60 )); then bars_chip=$(chip_ok   "$bars")
+    elif (( dbm >= -70 )); then bars_chip=$(chip_warn "$bars")
+    else                        bars_chip=$(chip_crit "$bars")
     fi
-    argos_item "󰖩 WiFi        $ssid  (${dbm}dBm · $bars)" "$color"
+    pri_row 4 "󰖩 ${safe_ssid}  ${bars_chip}" \
+        "" false "WiFi ssid=${ssid}  signal=${dbm} dBm"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -139,14 +144,15 @@ _dns_servers() {
 widget_dns_bar() { return; }
 
 widget_dns_menu() {
-    local servers; servers=$(cache_get "dns.servers" 60 \
+    # First DNS only to keep the line short. Click opens full resolvectl status.
+    local servers first safe_first action=""
+    servers=$(cache_get "dns.servers" 60 \
         bash -c "$(declare -f _dns_servers safe_cmd); _dns_servers")
     [[ -z "$servers" ]] && return
-    argos_item " DNS         $servers"
-    if command -v resolvectl >/dev/null 2>&1; then
-        echo "--▶ resolvectl status (full) | bash='$__DIR__/actions.sh dns-status' terminal=true"
-        echo "--▶ Flush DNS cache | bash='$__DIR__/actions.sh dns-flush' terminal=true"
-    fi
+    first=${servers%%,*}
+    safe_first=$(pango_escape "$first")
+    command -v resolvectl >/dev/null 2>&1 && action="$__DIR__/actions.sh dns-status"
+    pri_row 4 " DNS  ${safe_first}" "$action" true "DNS servers: ${servers}"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -155,15 +161,6 @@ widget_dns_menu() {
 
 widget_sock_bar() { return; }
 
-widget_sock_menu() {
-    local n; n=$(cache_get "sock.established" 5 \
-        bash -c "ss -tnH state established 2>/dev/null | wc -l")
-    n=${n:-0}
-    local color
-    if   (( n == 0 ));   then color="$COLOR_DIM"
-    elif (( n <= 50 ));  then color="$COLOR_ACCENT"
-    elif (( n <= 200 )); then color="$COLOR_WARN"
-    else                      color="$COLOR_CRIT"
-    fi
-    argos_item " Connections $n established" "$color"
-}
+# Connection count moved into widget_net_menu so the Network section stays
+# at ≤3 rows. This widget now self-suppresses in the menu.
+widget_sock_menu() { return; }

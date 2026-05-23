@@ -16,24 +16,24 @@
 # Each widget's bar may self-suppress (return empty) when its condition is not met;
 # see widgets/<section>.sh for per-widget behavior.
 BAR_WIDGETS=(
-    clock        # leftmost — time anchor
+    # clock      # opt-in — GNOME's top-bar already shows date+time
     git          # heartbeat — only when in/under a tracked repo
     k8s          # heartbeat — only when kubectl context configured
     cloud        # heartbeat — only when AWS/GCP/Azure profile detected
     vpn          # alarm — only when a VPN connection is active
     cpu          # heartbeat (usage% + temp °C)
     ram          # heartbeat (spark + used GB)
-    disk         # heartbeat — worst-mount used% (always; "!" prefix at CRIT)
     net          # heartbeat (rx/tx) — only when an interface is up
-    wifi         # heartbeat — signal bars only on bar (SSID stays in menu)
     docker       # heartbeat — container count, only when ≥1
-    battery      # heartbeat — laptop only; always-on ("!" prefix when CRIT)
     top_proc     # alarm — only when CPU% or MEM% above threshold
     apt          # alarm — only when apt updates are pending
-    iowait       # alarm — only when %iowait ≥ IOWAIT_PCT_WARN
     sshagent     # alarm — only when ssh-agent has 0 identities
     mic          # alarm — only when mic is muted
+    # disk       # alarm — only fires when ≥ DISK_PCT_WARN (see widget)
+    # wifi       # opt-in: signal bars (SSID stays in menu)
+    # battery    # alarm — only when on battery and low
     # uptime     # menu-only by default; opt-in if you want it on the bar
+    # iowait     # opt-in: %iowait alarm
     # load       # menu-only by default
     # weather    # menu-only by default; uncomment to add to bar
     # nepse      # opt-in: uncomment to show NEPSE during market hours
@@ -134,6 +134,8 @@ COLOR_WARN="#f9e2af"
 COLOR_CRIT="#f38ba8"
 COLOR_DIM="#6c7086"
 COLOR_ACCENT="#89b4fa"
+COLOR_BG="#1e1e2e"        # Catppuccin Mocha base — chip foreground default
+COLOR_FG="#cdd6f4"        # Catppuccin Mocha text — chip foreground on dim chips
 
 # ── network interface detection ──────────────────────────────
 # Leave empty for auto-detect (picks the default-route interface).

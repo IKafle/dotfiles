@@ -10,19 +10,8 @@ widget_clock_bar() {
 }
 
 widget_clock_menu() {
-    argos_item " Local       $(date '+%a %b %d  %H:%M')"
-    local entry label tz out
-    for entry in "${CLOCK_EXTRA_TZS[@]:-}"; do
-        [[ -z "$entry" ]] && continue
-        label="${entry%%/*}"
-        tz="${entry#*/}"
-        [[ -z "$label" || -z "$tz" || "$label" == "$entry" ]] && continue
-        # `date` silently falls back to UTC on unknown TZ; verify zoneinfo exists.
-        [[ -r "/usr/share/zoneinfo/$tz" ]] || continue
-        out=$(TZ="$tz" date '+%a %b %d  %H:%M' 2>/dev/null)
-        [[ -z "$out" ]] && continue
-        argos_item "-- $(printf '%-10s' "$label")  $out"
-    done
+    # GNOME's top-bar already shows the local clock — suppress this row.
+    return
 }
 
 # Resolve the location once (config override > geo).
@@ -40,39 +29,50 @@ widget_weather_bar() {
     [[ -z "$loc" ]] && return
     temp=$(cache_get "weather.$loc" "$CACHE_TTL_WEATHER" weather_compact "$loc")
     [[ -z "$temp" ]] && return
-    printf '󰖐 %s' "$temp"
+    printf '%s %s' "$(bar_icon "󰖐")" "$(pango_escape "$temp")"
 }
 
 widget_weather_menu() {
-    local loc temp detail
+    local loc temp safe_loc safe_temp
     loc=$(_widget_weather_loc)
     [[ -z "$loc" ]] && return
     temp=$(cache_get "weather.$loc" "$CACHE_TTL_WEATHER" weather_compact "$loc")
     [[ -z "$temp" ]] && return
-    detail=$(cache_get "weatherfull.$loc" "$CACHE_TTL_WEATHER" weather_full "$loc")
-    argos_item "󰖐 Weather     ${temp}  $loc"
-    [[ -n "$detail" ]] && argos_item "--   $detail" "$COLOR_DIM"
+    safe_loc=$(pango_escape "$loc")
+    safe_temp=$(pango_escape "$temp")
+    pri_row 4 "<span color=\"$COLOR_ACCENT\">󰖐</span> ${safe_temp}  ${safe_loc}" \
+        "" false "Weather: ${temp} in ${loc}"
 }
 
 # ── nepse ────────────────────────────────────────────────────
 widget_nepse_bar() {
     local open; open=$(nepse_is_market_open)
     [[ "$open" == "1" ]] || return
-    local raw idx chg pct pct_fmt
+    local raw idx chg pct pct_fmt color
     raw=$(cache_get nepse "$CACHE_TTL_COLD" nepse_fetch)
     [[ -z "$raw" ]] && return
     IFS='|' read -r idx chg pct <<< "$raw"
     [[ -z "$pct" ]] && return
     pct_fmt=$(awk -v p="$pct" 'BEGIN { printf "%+.2f", p }')
-    printf ' %s%%' "$pct_fmt"
+    if awk -v p="$pct" 'BEGIN { exit !(p+0 >= 0) }'; then color="$COLOR_OK"
+    else                                                   color="$COLOR_CRIT"
+    fi
+    printf '%s %s' "$(bar_icon "")" "$(bar_val "${pct_fmt}%" "$color")"
 }
 
 widget_nepse_menu() {
     local open; open=$(nepse_is_market_open)
     [[ "$open" != "1" ]] && return
-    local raw idx chg pct
+    local raw idx chg pct chip_label safe_idx
     raw=$(cache_get nepse "$CACHE_TTL_COLD" nepse_fetch)
     [[ -z "$raw" ]] && return
     IFS='|' read -r idx chg pct <<< "$raw"
-    argos_item " NEPSE       ${idx}  Δ${chg}  (${pct}%)"
+    safe_idx=$(pango_escape "$idx")
+    if awk -v p="$pct" 'BEGIN { exit !(p+0 >= 0) }'; then
+        chip_label=$(chip_ok "Δ${chg} (${pct}%)")
+    else
+        chip_label=$(chip_crit "Δ${chg} (${pct}%)")
+    fi
+    pri_row 4 "<span color=\"$COLOR_ACCENT\"></span> NEPSE  ${safe_idx}  ${chip_label}" \
+        "" false "NEPSE index=${idx}  change=${chg}  pct=${pct}%"
 }

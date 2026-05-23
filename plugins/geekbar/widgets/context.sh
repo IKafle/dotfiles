@@ -30,28 +30,35 @@ _widget_git_raw() {
 }
 
 widget_git_bar() {
-    local raw branch ahead behind dirty path
+    local raw branch ahead behind dirty path safe_branch
     raw=$(_widget_git_raw)
     [[ -z "$raw" ]] && return
     IFS='|' read -r branch ahead behind dirty path <<< "$raw"
-    local out=" $branch"
-    (( ahead  > 0 )) && out+=" ↑$ahead"
-    (( behind > 0 )) && out+=" ↓$behind"
-    (( dirty  > 0 )) && out+=" ●$dirty"
+    safe_branch=$(pango_escape "$branch")
+    local out
+    out="$(bar_icon "") ${safe_branch}"
+    (( ahead  > 0 )) && out+=" ↑${ahead}"
+    (( behind > 0 )) && out+=" ↓${behind}"
+    (( dirty  > 0 )) && out+=" $(bar_val "●${dirty}" "$COLOR_WARN")"
     printf '%s' "$out"
 }
 
 widget_git_menu() {
-    local raw branch ahead behind dirty path
+    # Single row: repo basename + branch + activity chips.
+    local raw branch ahead behind dirty path basename
     raw=$(_widget_git_raw)
     [[ -z "$raw" ]] && return
     IFS='|' read -r branch ahead behind dirty path <<< "$raw"
-    local detail="$branch"
-    (( ahead  > 0 )) && detail+=" ↑$ahead"
-    (( behind > 0 )) && detail+=" ↓$behind"
-    (( dirty  > 0 )) && detail+=" ●$dirty"
-    argos_item " Git         $detail"
-    argos_item "--  $path" "$COLOR_DIM"
+    basename="${path##*/}"
+    local safe_basename safe_branch chips=""
+    safe_basename=$(pango_escape "$basename")
+    safe_branch=$(pango_escape "$branch")
+    (( ahead  > 0 )) && chips+="  $(chip_ok   "↑${ahead}")"
+    (( behind > 0 )) && chips+="  $(chip_warn "↓${behind}")"
+    (( dirty  > 0 )) && chips+="  $(chip_warn "●${dirty}")"
+    pri_row 3 "<span color=\"$COLOR_ACCENT\"></span> ${safe_basename} · ${safe_branch}${chips}" \
+        "$__DIR__/actions.sh git-open-term ${path}" true \
+        "Repo: ${path}  branch=${branch}  ahead=${ahead}  behind=${behind}  dirty=${dirty}"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -91,28 +98,25 @@ widget_k8s_bar() {
     notify_edge k8s "$bucket" "⚠️ k8s context" "$body"
     [[ -z "$ctx" ]] && return
     ns=$(_widget_k8s_namespace)
-    # Argos bar honors only a single trailing `| color=` directive; selective
-    # Pango spans inside the label are unreliable. Surface danger contexts
-    # with a textual ⚠ prefix instead.
-    if _widget_k8s_is_danger "$ctx"; then
-        printf '⚠ 󱃾 %s · %s' "$ctx" "$ns"
-    else
-        printf '󱃾 %s · %s' "$ctx" "$ns"
-    fi
+    local safe_ctx safe_ns danger=""
+    safe_ctx=$(pango_escape "$ctx")
+    safe_ns=$(pango_escape "$ns")
+    _widget_k8s_is_danger "$ctx" && danger="  $(chip_crit DANGER)"
+    printf '%s %s · %s%s' "$(bar_icon "󱃾")" "$safe_ctx" "$safe_ns" "$danger"
 }
 
 widget_k8s_menu() {
+    # One row: ctx · ns. Click → context switch.
     command -v kubectl >/dev/null 2>&1 || return
-    local ctx ns ctx_color="$COLOR_ACCENT"
+    local ctx ns safe_ctx safe_ns danger=""
     ctx=$(_widget_k8s_context)
     [[ -z "$ctx" ]] && return
     ns=$(_widget_k8s_namespace)
-    _widget_k8s_is_danger "$ctx" && ctx_color="$COLOR_CRIT"
-    argos_item "󱃾 Context      $ctx" "$ctx_color"
-    argos_item "--󰛢 Namespace    $ns"
-    echo "--▶ Switch context | bash='$__DIR__/actions.sh k8s-switch' terminal=true"
-    echo "--📋 get pods | bash='$__DIR__/actions.sh k8s-get-pods' terminal=true"
-    echo "--📊 recent events | bash='$__DIR__/actions.sh k8s-events' terminal=true"
+    safe_ctx=$(pango_escape "$ctx")
+    safe_ns=$(pango_escape "$ns")
+    _widget_k8s_is_danger "$ctx" && danger="  $(chip_crit DANGER)"
+    pri_row 3 "<span color=\"$COLOR_ACCENT\">󱃾</span> ${safe_ctx} · ${safe_ns}${danger}" \
+        "$__DIR__/actions.sh k8s-switch" true "k8s context=${ctx}  namespace=${ns}"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -140,39 +144,34 @@ _widget_cloud_az() {
 }
 
 widget_cloud_bar() {
-    local v
-    v=$(_widget_cloud_aws); [[ -n "$v" && "$v" != "<not" ]] && { printf ' aws:%s' "$v"; return; }
-    v=$(_widget_cloud_gcp); [[ -n "$v" ]] && { printf ' gcp:%s' "$v"; return; }
-    v=$(_widget_cloud_az);  [[ -n "$v" ]] && { printf ' az:%s'  "$v"; return; }
+    local v safe
+    v=$(_widget_cloud_aws); [[ -n "$v" && "$v" != "<not" ]] && { safe=$(pango_escape "$v"); printf '%s aws %s' "$(bar_icon "")" "$safe"; return; }
+    v=$(_widget_cloud_gcp); [[ -n "$v" ]] && { safe=$(pango_escape "$v"); printf '%s gcp %s' "$(bar_icon "")" "$safe"; return; }
+    v=$(_widget_cloud_az);  [[ -n "$v" ]] && { safe=$(pango_escape "$v"); printf '%s az %s'  "$(bar_icon "")" "$safe"; return; }
 }
 
 widget_cloud_menu() {
-    local aws gcp az shown=0 parent_emitted=0
+    # One compact row per active provider. AWS click → aws sso login.
+    local aws gcp az safe
     aws=$(_widget_cloud_aws)
     gcp=$(_widget_cloud_gcp)
     az=$(_widget_cloud_az)
 
     if [[ -n "$aws" && "$aws" != "<not" ]]; then
-        argos_item " AWS profile  $aws"
-        parent_emitted=1
-        if command -v aws >/dev/null 2>&1; then
-            echo "--▶ aws sso login | bash='$__DIR__/actions.sh cloud-aws-sso' terminal=true"
-            echo "--▶ aws sts get-caller-identity | bash='$__DIR__/actions.sh cloud-aws-whoami' terminal=true"
-        fi
-        shown=1
+        safe=$(pango_escape "$aws")
+        pri_row 3 "<span color=\"$COLOR_ACCENT\"></span> aws  ${safe}" \
+            "$__DIR__/actions.sh cloud-aws-sso" true "AWS profile=${aws}"
     fi
     if [[ -n "$gcp" ]]; then
-        argos_item " GCP account  $gcp"
-        if command -v gcloud >/dev/null 2>&1; then
-            echo "--▶ gcloud auth list | bash='$__DIR__/actions.sh cloud-gcp-list' terminal=true"
-        fi
-        shown=1
+        safe=$(pango_escape "$gcp")
+        pri_row 3 "<span color=\"$COLOR_ACCENT\"></span> gcp  ${safe}" \
+            "" false "GCP account=${gcp}"
     fi
     if [[ -n "$az" ]]; then
-        argos_item " Azure sub    $az"
-        shown=1
+        safe=$(pango_escape "$az")
+        pri_row 3 "<span color=\"$COLOR_ACCENT\"></span> az   ${safe}" \
+            "" false "Azure account=${az}"
     fi
-    (( shown == 0 )) && return
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -205,14 +204,15 @@ widget_vpn_bar() {
     fi
     notify_edge vpn "$bucket" "🔓 VPN $bucket" "$body"
     [[ -z "$name" ]] && return
-    printf '󰦝 %s' "$name"
+    printf '%s %s' "$(bar_icon "󰦝")" "$(pango_escape "$name")"
 }
 
 widget_vpn_menu() {
-    local name
+    # Click → disconnect.
+    local name safe_name
     name=$(_widget_vpn_detect)
     [[ -z "$name" ]] && return
-    argos_item "󰦝 VPN          $name" "$COLOR_OK"
-    echo "--▶ Disconnect | bash='$__DIR__/actions.sh vpn-disconnect $name' terminal=true"
-    echo "--▶ Show route table | bash='$__DIR__/actions.sh vpn-routes' terminal=true"
+    safe_name=$(pango_escape "$name")
+    pri_row 3 "<span color=\"$COLOR_OK\">󰦝</span> ${safe_name}  $(chip_ok UP)" \
+        "$__DIR__/actions.sh vpn-disconnect ${name}" true "VPN connection: ${name} (click to disconnect)"
 }
