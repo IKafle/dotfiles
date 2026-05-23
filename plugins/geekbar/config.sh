@@ -17,7 +17,7 @@
 # see widgets/<section>.sh for per-widget behavior.
 BAR_WIDGETS=(
     # clock      # opt-in — GNOME's top-bar already shows date+time
-    git          # heartbeat — only when in/under a tracked repo
+    # git        # opt-out — branch+dirty in the bar; git row is still in the dropdown
     k8s          # heartbeat — only when kubectl context configured
     cloud        # heartbeat — only when AWS/GCP/Azure profile detected
     vpn          # alarm — only when a VPN connection is active
@@ -47,6 +47,7 @@ MENU_SECTIONS=(
     system       # uptime, cpu, ram, load, top_proc, disk, iowait, battery
     network      # net (iface/ssid/local-ip/public-ip/rates), wifi, dns, sock
     dev          # docker, ports, sshagent, langver
+    activity     # top_repo (most commits today), last_file (recent edit)
     audio        # vol, mic
     updates      # apt
     extras       # clock (extra TZs), weather, nepse
@@ -57,6 +58,7 @@ MENU_SECTION_context=(git k8s cloud vpn)
 MENU_SECTION_system=(uptime cpu ram swap load top_proc disk iowait battery)
 MENU_SECTION_network=(net pubip xfer wifi dns sock)
 MENU_SECTION_dev=(docker ports sshagent langver)
+MENU_SECTION_activity=(top_repo last_file)
 MENU_SECTION_audio=(vol mic)
 MENU_SECTION_updates=(apt reboot)
 MENU_SECTION_extras=(clock weather)

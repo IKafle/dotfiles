@@ -267,6 +267,16 @@ case "$action" in
         run_in_term 'cat /var/run/reboot-required 2>/dev/null; echo; [[ -r /var/run/reboot-required.pkgs ]] && { echo "Triggering packages:"; cat /var/run/reboot-required.pkgs; echo; }; read -rp "Type yes to reboot now: " c; [[ "$c" == "yes" ]] && sudo systemctl reboot || echo "Cancelled."'
         ;;
 
+    # ── activity ─────────────────────────────────────────────
+    open-file)
+        file="${1:-}"
+        if [[ -z "$file" || ! -e "$file" ]]; then
+            notify-send "geekbar" "open-file: missing path" 2>/dev/null
+            exit 1
+        fi
+        edit_file "$file"
+        ;;
+
     # ── clipboard ────────────────────────────────────────────
     copy-pubip)
         pubip_file="${XDG_CACHE_HOME:-$HOME/.cache}/geekbar/publicip"
