@@ -40,3 +40,76 @@ widget_docker_menu() {
         fi
     fi
 }
+
+# ── ports ────────────────────────────────────────────────────
+# Listening dev-server ports from DEV_PORTS. Bar self-suppresses
+# when none match; menu always renders the configured set.
+
+# Cached "port[ name]" lines (one per listening port in DEV_PORTS).
+# Name is empty when the process is owned by another user / root —
+# ss -p only reveals procs the caller can see.
+_ports_listening() {
+    cache_get ports.listening 5 bash -c '
+        command -v ss >/dev/null 2>&1 || exit 0
+        wanted=" '"${DEV_PORTS[*]}"' "
+        ss -tlnpH 2>/dev/null | awk -v wanted="$wanted" '"'"'
+            {
+                addr = $4
+                n = split(addr, a, ":")
+                port = a[n]
+                if (index(wanted, " " port " ") == 0) next
+                name = ""
+                if (match($0, /users:\(\("[^"]+"/)) {
+                    name = substr($0, RSTART+9, RLENGTH-10)
+                }
+                if (seen[port]++) next
+                print port (name ? " " name : "")
+            }
+        '"'"'
+    '
+}
+
+widget_ports_bar() {
+    command -v ss >/dev/null 2>&1 || return
+    local data; data=$(_ports_listening)
+    [[ -z "$data" ]] && return
+    local ports=()
+    while IFS=' ' read -r p _; do
+        [[ -z "$p" ]] && continue
+        ports+=("$p")
+    done <<< "$data"
+    (( ${#ports[@]} == 0 )) && return
+    local shown=("${ports[@]:0:5}")
+    local suffix=""
+    (( ${#ports[@]} > 5 )) && suffix="…"
+    printf ' %d %s%s' "${#ports[@]}" "${shown[*]}" "$suffix"
+}
+
+widget_ports_menu() {
+    if ! command -v ss >/dev/null 2>&1; then
+        argos_item " ss not installed" "$COLOR_DIM"
+        return
+    fi
+    local data; data=$(_ports_listening)
+    declare -A live=()
+    if [[ -n "$data" ]]; then
+        while IFS=' ' read -r p name; do
+            [[ -z "$p" ]] && continue
+            live["$p"]="${name:-?}"
+        done <<< "$data"
+    fi
+    local p
+    for p in "${DEV_PORTS[@]}"; do
+        if [[ -n "${live[$p]:-}" ]]; then
+            argos_item " $p      ${live[$p]}" "$COLOR_OK"
+        else
+            argos_item " $p      —" "$COLOR_DIM"
+        fi
+    done
+    argos_sep
+    local total
+    total=$(ss -tlnH 2>/dev/null | wc -l)
+    argos_item " Total       ${total} listening" "$COLOR_DIM"
+    echo "▶ Show all listening (ss -tln) | bash='$__DIR__/actions.sh ports-show' terminal=true"
+    echo "▶ What's on port… | bash='$__DIR__/actions.sh ports-prompt' terminal=true"
+}
