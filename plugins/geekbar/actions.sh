@@ -139,6 +139,149 @@ case "$action" in
     vol-mute)  pactl set-sink-mute     @DEFAULT_SINK@   toggle ;;
     mic-mute)  pactl set-source-mute   @DEFAULT_SOURCE@ toggle ;;
     mixer)     pavucontrol & ;;
+
+    # ── git ──────────────────────────────────────────────────
+    git-fetch-all)
+        repo="${1:-$HOME}"
+        run_in_term "cd '$repo' && git fetch --all"
+        ;;
+    git-log)
+        repo="${1:-$HOME}"
+        run_in_term "cd '$repo' && git log --oneline -20"
+        ;;
+    git-open-editor)
+        repo="${1:-$HOME}"
+        # Prefer GUI editor on the repo dir; fall back to $EDITOR in a terminal.
+        edit_file "$repo"
+        ;;
+    git-open-term)
+        repo="${1:-$HOME}"
+        run_in_term "cd '$repo' && exec \$SHELL"
+        ;;
+
+    # ── disk ─────────────────────────────────────────────────
+    disk-ncdu)
+        path="${1:-$HOME}"
+        if ! command -v ncdu >/dev/null 2>&1; then
+            notify-send "geekbar" "ncdu not installed" 2>/dev/null
+            exit 0
+        fi
+        run_in_term "ncdu '$path'"
+        ;;
+    disk-du)
+        path="${1:-$HOME}"
+        run_in_term "du -sh '$path'/* 2>/dev/null | sort -h | tail -20 || du -sh '$path'/* 2>/dev/null"
+        ;;
+
+    # ── top processes ────────────────────────────────────────
+    top-kill)
+        pid="${1:-}"
+        if [[ -z "$pid" || ! "$pid" =~ ^[0-9]+$ ]]; then
+            notify-send "geekbar" "top-kill: missing or invalid PID" 2>/dev/null
+            exit 1
+        fi
+        if (( pid == 1 )); then
+            notify-send "geekbar" "Refusing to kill PID 1 (init)" 2>/dev/null
+            exit 1
+        fi
+        notify-send "geekbar" "Kill PID $pid? Running kill in terminal" 2>/dev/null
+        run_in_term "kill -TERM $pid; sleep 1; ps -p $pid"
+        ;;
+    top-renice)
+        pid="${1:-}"
+        if [[ -z "$pid" || ! "$pid" =~ ^[0-9]+$ ]]; then
+            notify-send "geekbar" "top-renice: missing or invalid PID" 2>/dev/null
+            exit 1
+        fi
+        run_in_term "renice +10 $pid"
+        ;;
+    htop-filter)
+        pid="${1:-}"
+        if [[ -z "$pid" || ! "$pid" =~ ^[0-9]+$ ]]; then
+            notify-send "geekbar" "htop-filter: missing or invalid PID" 2>/dev/null
+            exit 1
+        fi
+        run_in_term "htop -p $pid"
+        ;;
+
+    # ── network ──────────────────────────────────────────────
+    net-nload)
+        iface="${1:-}"
+        if command -v nload >/dev/null 2>&1; then
+            if [[ -n "$iface" ]]; then run_in_term "nload '$iface'"
+            else                       run_in_term "nload"
+            fi
+        elif command -v bmon >/dev/null 2>&1; then
+            if [[ -n "$iface" ]]; then run_in_term "bmon -p '$iface'"
+            else                       run_in_term "bmon"
+            fi
+        else
+            notify-send "geekbar" "neither nload nor bmon is installed" 2>/dev/null
+        fi
+        ;;
+    net-trace)
+        run_in_term "traceroute 8.8.8.8"
+        ;;
+
+    # ── system / geekbar self ────────────────────────────────
+    argos-restart)
+        # Argos's dbus interface name varies by extension build; if the
+        # primary call fails, try the USR1 signal and finally surface a
+        # hint about the X11-only Alt+F2 → r restart.
+        if gdbus call --session \
+            --dest com.github.p-e-w.argos \
+            --object-path /com/github/p-e-w/argos \
+            --method com.github.p-e-w.argos.Reload >/dev/null 2>&1; then
+            notify-send "geekbar" "Argos panels reloaded" 2>/dev/null
+        elif pkill -USR1 argos 2>/dev/null; then
+            notify-send "geekbar" "Argos signalled (USR1)" 2>/dev/null
+        else
+            notify-send "geekbar" "Couldn't reload Argos — on X11 try Alt+F2 → r" 2>/dev/null
+        fi
+        ;;
+    geekbar-doctor)
+        if [[ -x "$HOME/.bin/tools/geekbar-doctor.sh" ]]; then
+            run_in_term "$HOME/.bin/tools/geekbar-doctor.sh"
+        else
+            run_in_term "bx run geekbar-doctor"
+        fi
+        ;;
+    geekbar-test)
+        if [[ -x "$HOME/.bin/tools/geekbar-test.sh" ]]; then
+            run_in_term "$HOME/.bin/tools/geekbar-test.sh"
+        else
+            run_in_term "bx run geekbar-test"
+        fi
+        ;;
+    show-widget-catalog)
+        if [[ -x "$HOME/.bin/tools/geekbar-test.sh" ]]; then
+            run_in_term "$HOME/.bin/tools/geekbar-test.sh"
+        else
+            run_in_term "bx run geekbar-test"
+        fi
+        ;;
+
+    # ── clipboard ────────────────────────────────────────────
+    copy-pubip)
+        pubip_file="${XDG_CACHE_HOME:-$HOME/.cache}/geekbar/publicip"
+        if [[ ! -s "$pubip_file" ]]; then
+            notify-send "geekbar" "No cached public IP yet" 2>/dev/null
+            exit 0
+        fi
+        ip=$(< "$pubip_file")
+        if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]] && command -v wl-copy >/dev/null 2>&1; then
+            printf '%s' "$ip" | wl-copy
+        elif command -v xclip >/dev/null 2>&1; then
+            printf '%s' "$ip" | xclip -selection clipboard
+        elif command -v wl-copy >/dev/null 2>&1; then
+            printf '%s' "$ip" | wl-copy
+        else
+            notify-send "geekbar" "No clipboard tool (install wl-clipboard or xclip)" 2>/dev/null
+            exit 1
+        fi
+        notify-send "geekbar" "Copied public IP: $ip" 2>/dev/null
+        ;;
+
     *)
         notify-send "geekbar" "Unknown action: $action" 2>/dev/null
         exit 1

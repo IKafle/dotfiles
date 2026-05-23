@@ -85,6 +85,8 @@ Every new automation belongs here. That's the rule.
 | `docker-desktop-init`      | install Docker Desktop (KVM-isolated)    |
 | `vault-init`               | bootstrap `~/vault` workspace            |
 | `claude-init`              | install Claude Code CLI                  |
+| `geekbar-doctor`           | diagnose the geekbar plugin install      |
+| `geekbar-test`             | render the bar + dropdown to stdout      |
 
 Run with `bx run <tool>` or directly: `bash ~/.bin/tools/<tool>.sh`.
 
@@ -126,3 +128,43 @@ linking, with `BX_PLUGIN_NAME` and `BX_PLUGIN_DIR` in the environment.
 
 Supported kinds today: `argos`. Adding a new kind requires editing
 `_bx_plugin_apply` in `bx` — see `CLAUDE.md` for the contract.
+
+## Geekbar
+
+`geekbar` is the directory-form Argos plugin under
+`~/.bin/plugins/geekbar/`. It paints a compact GNOME top-panel readout
+that refreshes every 2s and unfolds into a categorised dropdown of ~24
+widgets covering:
+
+- **System** — uptime, cpu (temp/freq/usage), ram, load, top processes,
+  disk, I/O wait, battery.
+- **Network** — connectivity, default route, vpn, public IP, listening
+  ports, ssh-agent keys, DNS.
+- **Dev** — git status of tracked repos, docker, kubectl context,
+  cloud auth (AWS/GCP).
+- **Updates** — apt upgrade counts (with a security-only sub-count).
+- **Audio / extras** — volume + mic, weather, clock.
+
+The dropdown menu items are clickable: kill a runaway process, open
+`htop -p <pid>`, fetch a git repo, run `ncdu` on `/home`, copy the
+cached public IP, restart Argos, etc. Click handlers route through
+`plugins/geekbar/actions.sh`.
+
+Geekbar also fires **edge-triggered desktop notifications** when a
+metric crosses a warn/crit threshold (CPU temp, RAM, disk, battery,
+APT security count, …). State lives under
+`~/.cache/geekbar/` and `~/.local/state/geekbar/` so notifications
+don't repeat until the bucket changes.
+
+```bash
+bx plugin enable geekbar     # symlink into ~/.config/argos/
+bx enable geekbar-track      # shell hook: refresh git/cloud caches on cd / aws login
+bx run geekbar-doctor        # verify the install, missing deps, stale state
+bx run geekbar-test          # render the bar + dropdown to stdout for inspection
+```
+
+Customisation lives in **one file**: `~/.bin/plugins/geekbar/config.sh`.
+Edit the `BAR_WIDGETS` array (what shows in the panel), the
+`MENU_SECTIONS` / `MENU_SECTION_<name>` arrays (what shows in the
+dropdown and in what order), and the per-widget thresholds
+(`CPU_TEMP_WARN`, `RAM_PCT_CRIT`, `DISK_PCT_WARN`, …).
