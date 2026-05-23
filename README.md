@@ -96,22 +96,29 @@ Plugins keep the source-of-truth file in `~/.bin/plugins/` (so it's in
 git) and symlink it into the external location when enabled.
 
 ```bash
-bx plugin ls                        # list plugins, ✔/✘
-bx plugin enable geekbar            # creates ~/.config/argos/geekbar.2s+.sh → plugins/
-bx plugin disable geekbar           # removes that symlink (source kept in plugins/)
-bx plugin new mywidget --kind argos # scaffold a new plugin
-bx plugin doctor                    # verify each enabled plugin's external symlink
-bx plugin help                      # full plugin subcommand reference
+bx plugin ls                              # list plugins, ✔/✘
+bx plugin enable geekbar                  # creates ~/.config/argos/geekbar.2s+.sh → plugins/
+bx plugin disable geekbar                 # removes that symlink (source kept in plugins/)
+bx plugin new mywidget --kind argos       # scaffold a new plugin (file form)
+bx plugin new mywidget --kind argos --dir # scaffold a new plugin (directory form)
+bx plugin doctor                          # verify each enabled plugin's external symlink
+bx plugin help                            # full plugin subcommand reference
 ```
 
-Plugin files live at `~/.bin/plugins/<name>.<kind>.sh` with header
-metadata:
+Plugins come in two forms. **File form** — `~/.bin/plugins/<name>.<kind>.sh`
+— for single-file plugins:
 
 ```bash
 # bx-purpose: GNOME panel widget showing system stats
 # bx-plugin-kind: argos
 # bx-plugin-target: ~/.config/argos/geekbar.2s+.sh
 ```
+
+**Directory form** — `~/.bin/plugins/<name>/` with entrypoint
+`<name>.<kind>.sh` plus sibling files (`lib.sh`, `widgets/`, etc.) — for
+plugins that span multiple files. If `plugins/<name>/postenable.sh`
+exists and is executable, `bx plugin enable <name>` runs it after
+linking, with `BX_PLUGIN_NAME` and `BX_PLUGIN_DIR` in the environment.
 
 | plugin    | kind  | target                              |
 |-----------|-------|-------------------------------------|

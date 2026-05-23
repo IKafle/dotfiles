@@ -18,7 +18,7 @@ the contract.
 8. **Run `bx selftest` before committing.** All checks must pass.
 9. **Preserve load order with NN- prefixes** (see table below). 10-unit gaps let you wedge in.
 10. **No comments explaining WHAT the code does.** Only non-obvious WHY (invariant, workaround, gotcha).
-11. **Keep CLAUDE.md accurate.** New folder, file convention, metadata field, subcommand, plugin kind, env var, lifecycle stage → update this file in the same change.
+11. **Keep CLAUDE.md accurate.** New folder, file convention, metadata field, subcommand, plugin kind, plugin form, env var, lifecycle stage → update this file in the same change.
 12. **Decide about README.md.** If the change is user-visible (new command, new top-level folder, new tool/plugin, install flow change, removed capability) → update README.md in the same change.
 
 ## Architecture
@@ -42,7 +42,9 @@ the contract.
 
 - **Modules** (`modules/*.sh`) — *sourced* into every interactive bash. Idempotent. Shape the shell, no further side effects.
 - **Tools** (`tools/*.sh`) — *executed* on demand via `bx run <name>`. Install software, bootstrap state.
-- **Plugins** (`plugins/<name>.<kind>.sh`) — *symlinked* into a tool-mandated external path (Argos, GNOME-ext, systemd). Source of truth stays in git.
+- **Plugins** — *symlinked* into a tool-mandated external path (Argos, GNOME-ext, systemd). Source of truth stays in git. Two forms:
+  - **file form**: `plugins/<name>.<kind>.sh` — single file. Use for one-file plugins.
+  - **directory form**: `plugins/<name>/<name>.<kind>.sh` + siblings (`lib.sh`, `widgets/`, `postenable.sh`, …). Use when the plugin needs more than one file. The entrypoint file inside the directory carries the three `bx-plugin-*` headers; `enabled-plugins/<name>` symlinks to the entrypoint (not the directory) so `readlink -f` chains keep working.
 
 **The symlink farm.** `init.sh` sources `enabled/*.sh` in lexical order. `bx enable/disable` create/remove symlinks. No config file, no parsing, no drift.
 
@@ -81,13 +83,24 @@ main() { :; }
 main "$@"
 ```
 
-**Plugin** — three required header lines:
+**Plugin (file form)** — three required header lines:
 ```bash
 # bx-purpose: <one-liner>
 # bx-plugin-kind: argos
 # bx-plugin-target: ~/.config/argos/mywidget.1s+.sh
 ```
 `bx-plugin-target` is the EXACT external path (including tool-specific filename quirks like Argos's `.2s+.sh` refresh-rate suffix). Supported kinds: `argos`. Add a new kind by editing the `_bx_plugin_apply` case in `~/.bin/bx`, then document it here.
+
+**Plugin (directory form)** — for plugins that need more than one file. Scaffold with `bx plugin new <name> --kind <k> --dir`:
+```
+plugins/<name>/
+├── <name>.<kind>.sh    # entrypoint with the three bx-plugin-* headers
+├── config.sh           # optional
+├── lib.sh              # optional
+├── postenable.sh       # optional — runs after `bx plugin enable <name>`
+└── widgets/            # optional — any sub-files
+```
+The entrypoint filename MUST be `<name>.<kind>.sh` (matching the directory name). Selftest enforces this. The entrypoint resolves its siblings via `__DIR__=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")` then `. "$__DIR__/lib.sh"`. `enabled-plugins/<name>` symlinks to the entrypoint file, and the external target also points at the entrypoint file. If `postenable.sh` exists and is executable, `bx plugin enable <name>` runs it with `BX_PLUGIN_NAME` and `BX_PLUGIN_DIR` in the environment.
 
 ## Conventions
 
@@ -122,7 +135,7 @@ bx help                  full help with examples
 | One-shot installer | `tools/name.sh` | `bx run name` (auto) |
 | Bash completion | `completions/<cmd>` | auto-sourced |
 | Shared helper for modules | `lib/<name>.sh` | source from init.sh |
-| External-mount customization | `plugins/<name>.<kind>.sh` | `bx plugin enable <name>` |
+| External-mount customization | `plugins/<name>.<kind>.sh` (file) or `plugins/<name>/<name>.<kind>.sh` (dir) | `bx plugin enable <name>` |
 | Workflow note | `docs/<topic>.md` | link from README |
 
 ## Git workflow
