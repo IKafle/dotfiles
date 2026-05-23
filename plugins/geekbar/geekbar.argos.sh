@@ -72,6 +72,16 @@ for section in "${MENU_SECTIONS[@]}"; do
 done
 
 # ── 2. Priority-cap to fit GB_MENU_MAX_ROWS ──────────────────
+# Two-part hysteresis to prevent P4 row flicker:
+#
+#   (a) Drop only the MINIMUM rows needed to fit, not whole priority
+#       classes. Old behavior nuked all 5 P4 rows (Location, DNS, xfer,
+#       weather, battery) to fix a 1-row overflow.
+#
+#   (b) Persist the drop budget for 30 s so brief alarm spikes
+#       (top_proc bouncing across 50 % CPU, iowait/load crossing warn,
+#       mic toggling) don't toggle the dropped set in/out every 2 s
+#       Argos refresh while the menu is open.
 _count_total() {
     local n=${#WIDGET_LINES[@]} entry sec
     local -A seen=()
@@ -86,22 +96,57 @@ _count_total() {
     echo $(( 1 + top_sep + n + inter_seps + 1 + 3 ))
 }
 
-_drop_class() {
-    local cls="$1" entry prio
-    local kept=()
-    for entry in "${WIDGET_LINES[@]}"; do
-        IFS='|' read -r prio _ _ <<< "$entry"
-        [[ "$prio" == "$cls" ]] && continue
-        kept+=("$entry")
+# Drop the N lowest-priority rows. Within the same priority, drop later
+# rows first — extras (weather/nepse) is the last section, so a 1-row
+# overflow takes weather, not the network section's Location/DNS rows.
+# Floor at P2: P0/P1 are never droppable.
+_drop_lowest_n() {
+    local n="$1" prio i j idx p
+    (( n <= 0 )) && return
+    for prio in 4 3 2; do
+        (( n <= 0 )) && break
+        for (( j=${#WIDGET_LINES[@]}-1; j>=0; j-- )); do
+            (( n <= 0 )) && break
+            [[ -z "${WIDGET_LINES[$j]+x}" ]] && continue
+            IFS='|' read -r p _ _ <<< "${WIDGET_LINES[$j]}"
+            if [[ "$p" == "$prio" ]]; then
+                unset 'WIDGET_LINES[j]'
+                ((n--))
+            fi
+        done
+        WIDGET_LINES=("${WIDGET_LINES[@]}")
     done
-    WIDGET_LINES=("${kept[@]}")
 }
 
-# Drop order: P4 ambient → P3 context → P2 alarms. P0/P1 never drop.
-for _cls in 4 3 2; do
-    (( $(_count_total) <= GB_MENU_MAX_ROWS )) && break
-    _drop_class "$_cls"
-done
+_natural_budget=$(( $(_count_total) - GB_MENU_MAX_ROWS ))
+(( _natural_budget < 0 )) && _natural_budget=0
+
+_overflow_state="$GB_STATE_DIR/overflow.budget"
+_overflow_ttl=30
+_sticky_budget=0
+if [[ -f "$_overflow_state" ]]; then
+    _age=$(( $(date +%s) - $(stat -c %Y "$_overflow_state") ))
+    if (( _age < _overflow_ttl )); then
+        _sticky_budget=$(< "$_overflow_state")
+        [[ "$_sticky_budget" =~ ^[0-9]+$ ]] || _sticky_budget=0
+    fi
+fi
+
+_effective_budget=$_natural_budget
+(( _sticky_budget > _effective_budget )) && _effective_budget=$_sticky_budget
+
+# Refresh state only when natural pressure exists; the file's mtime
+# encodes "last moment we actually needed to drop". After 30 s of no
+# real overflow, state expires and the sticky budget is released.
+if (( _natural_budget > 0 )); then
+    if (( _natural_budget > _sticky_budget )); then
+        printf '%s' "$_natural_budget" > "$_overflow_state"
+    else
+        touch "$_overflow_state"
+    fi
+fi
+
+_drop_lowest_n "$_effective_budget"
 
 # ── 3. Header pulse row ──────────────────────────────────────
 _uptime_sec=$(awk '{print int($1)}' /proc/uptime)
