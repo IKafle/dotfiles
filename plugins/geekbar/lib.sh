@@ -76,6 +76,42 @@ color_for() {
     fi
 }
 
+# ── notify_edge <widget> <new_bucket> <title> <body>
+# Fires notify-send only on BUCKET TRANSITIONS — when the widget moves
+# from one bucket to another. Bucket transitions are the events that
+# warrant a desktop notification; sustained states do not.
+#
+# Per-widget state stored at $GB_STATE_DIR/notify.<widget>. Contains
+# the last-observed bucket. Initial run sets the bucket without firing.
+#
+# Respects ENABLE_NOTIFICATIONS (master switch) and NOTIFY_<widget>
+# (per-widget switch; defaults to 1 = enabled).
+#
+# Returns 0 unconditionally; never an error path.
+notify_edge() {
+    local widget="$1" new_bucket="$2" title="$3" body="$4"
+
+    (( ${ENABLE_NOTIFICATIONS:-1} == 1 )) || return 0
+    local per_widget_var="NOTIFY_${widget}"
+    local per_widget="${!per_widget_var:-1}"
+    (( per_widget == 1 )) || return 0
+    command -v notify-send >/dev/null 2>&1 || return 0
+
+    local state_file="$GB_STATE_DIR/notify.${widget}"
+    local old_bucket=""
+    [[ -f "$state_file" ]] && old_bucket=$(< "$state_file")
+
+    printf '%s' "$new_bucket" > "$state_file"
+
+    [[ -z "$old_bucket" ]] && return 0
+    [[ "$old_bucket" == "$new_bucket" ]] && return 0
+
+    local urgency="normal"
+    [[ "$new_bucket" == "crit" ]] && urgency="critical"
+
+    notify-send -u "$urgency" -a geekbar "$title" "$body" 2>/dev/null || true
+}
+
 # ── human_bytes <bytes_per_sec> → "2.1M" / "340K" / "12B"
 human_bytes() {
     local b="${1:-0}"
