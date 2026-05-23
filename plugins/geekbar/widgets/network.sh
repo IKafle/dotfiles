@@ -89,12 +89,10 @@ _wifi_ssid() {
 widget_wifi_bar() {
     local sig; sig=$(cache_get "wifi.sig" 5 bash -c "$(declare -f _wifi_signal get_default_iface safe_cmd); _wifi_signal")
     [[ -z "$sig" ]] && return
-    local dbm bars ssid
+    local dbm bars
     read -r dbm bars <<< "$sig"
-    ssid=$(cache_get "wifi.ssid" 30 \
-        bash -c "$(declare -f _wifi_ssid get_default_iface safe_cmd); _wifi_ssid")
-    [[ -z "$ssid" ]] && ssid="—"
-    printf ' %s %s' "$bars" "$ssid"
+    # SSID stays in the menu — bar keeps width tight with signal-only.
+    printf ' %s' "$bars"
 }
 
 widget_wifi_menu() {
@@ -143,14 +141,11 @@ widget_dns_bar() { return; }
 widget_dns_menu() {
     local servers; servers=$(cache_get "dns.servers" 60 \
         bash -c "$(declare -f _dns_servers safe_cmd); _dns_servers")
-    if [[ -z "$servers" ]]; then
-        argos_dim " DNS         no resolver configured"
-        return
-    fi
+    [[ -z "$servers" ]] && return
     argos_item " DNS         $servers"
     if command -v resolvectl >/dev/null 2>&1; then
-        echo "▶ resolvectl status (full) | bash='$__DIR__/actions.sh dns-status' terminal=true"
-        echo "▶ Flush DNS cache | bash='$__DIR__/actions.sh dns-flush' terminal=true"
+        echo "--▶ resolvectl status (full) | bash='$__DIR__/actions.sh dns-status' terminal=true"
+        echo "--▶ Flush DNS cache | bash='$__DIR__/actions.sh dns-flush' terminal=true"
     fi
 }
 

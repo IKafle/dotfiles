@@ -53,26 +53,34 @@ _section_title() {
 
 first_section=1
 for section in "${MENU_SECTIONS[@]}"; do
+    # Buffer the section's widget output so we can skip the whole section
+    # (and its separator + header) when no widget produced any line.
+    members_var="MENU_SECTION_${section}[@]"
+    section_body=""
+    for w in "${!members_var}"; do
+        if declare -F "widget_${w}_menu" >/dev/null; then
+            out=$("widget_${w}_menu")
+            [[ -z "$out" ]] && continue
+            section_body+="$out"$'\n'
+        fi
+    done
+    [[ -z "$section_body" ]] && continue
     if (( first_section )); then
         first_section=0
     else
         echo "---"
     fi
     _section_title "$section"
-    # Look up MENU_SECTION_<section> array indirectly.
-    members_var="MENU_SECTION_${section}[@]"
-    for w in "${!members_var}"; do
-        if declare -F "widget_${w}_menu" >/dev/null; then
-            "widget_${w}_menu"
-        fi
-    done
+    printf '%s' "$section_body"
 done
 
 echo "---"
 
-# ── Actions ──
-argos_dim "── Actions ──"
-echo " Refresh now | refresh=true"
-echo " Edit config | bash='$__DIR__/actions.sh edit-config' terminal=false"
-echo " Open config folder | bash='$__DIR__/actions.sh open-config-folder' terminal=false"
-echo " Open htop | bash='$__DIR__/actions.sh open-htop' terminal=false"
+# ── Actions ── (collapsed under a parent row via Argos `--` submenu)
+echo " geekbar | font=\"JetBrainsMono Nerd Font\""
+echo "-- Refresh now | refresh=true"
+echo "-- Edit config | bash='$__DIR__/actions.sh edit-config' terminal=false"
+echo "-- Open config folder | bash='$__DIR__/actions.sh open-config-folder' terminal=false"
+echo "-- Open htop | bash='$__DIR__/actions.sh open-htop' terminal=false"
+echo "-- Reload Argos | bash='$__DIR__/actions.sh argos-restart' terminal=false"
+echo "-- Run doctor | bash='$__DIR__/actions.sh geekbar-doctor' terminal=false"

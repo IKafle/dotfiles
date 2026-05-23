@@ -13,8 +13,8 @@ widget_uptime_bar() {
 widget_uptime_menu() {
     local sec; sec=$(awk '{print int($1)}' /proc/uptime)
     local kernel; kernel=$(cache_get kernel "$CACHE_TTL_COLD" uname -r)
-    argos_item " Kernel      $kernel"
     argos_item " Uptime      $(human_duration "$sec")"
+    argos_item "--   kernel $kernel" "$COLOR_DIM"
 }
 
 # ── cpu ──────────────────────────────────────────────────────
@@ -132,9 +132,9 @@ widget_top_proc_menu() {
         fi
     fi
     if [[ -n "$action_pid" ]]; then
-        echo "▶ htop -p ${action_pid} | bash='$__DIR__/actions.sh htop-filter ${action_pid}' terminal=true"
-        echo "▶ Kill ${action_name} (${action_pid}) | bash='$__DIR__/actions.sh top-kill ${action_pid}' terminal=true"
-        echo "▶ renice ${action_pid} | bash='$__DIR__/actions.sh top-renice ${action_pid}' terminal=true"
+        echo "--▶ htop -p ${action_pid} | bash='$__DIR__/actions.sh htop-filter ${action_pid}' terminal=true"
+        echo "--▶ Kill ${action_name} (${action_pid}) | bash='$__DIR__/actions.sh top-kill ${action_pid}' terminal=true"
+        echo "--▶ renice ${action_pid} | bash='$__DIR__/actions.sh top-renice ${action_pid}' terminal=true"
     fi
 }
 
@@ -194,11 +194,9 @@ widget_disk_bar() {
 widget_disk_menu() {
     local raw rows mount used size pct color used_b size_b used_h size_h
     raw=$(_disk_raw)
-    if [[ -z "$raw" ]]; then
-        argos_dim " Disk         no tracked mounts"
-        return
-    fi
+    [[ -z "$raw" ]] && return
     rows=$(printf "%s\n" "$raw" | sort -k4 -n -r)
+    local first=1
     while read -r mount used size pct; do
         [[ -z "$mount" ]] && continue
         used_b=$(( used * 1024 ))
@@ -206,14 +204,17 @@ widget_disk_menu() {
         used_h=$(human_bytes "$used_b")
         size_h=$(human_bytes "$size_b")
         color=$(color_for "$pct" "$DISK_PCT_WARN" "$DISK_PCT_CRIT")
-        argos_item " $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
+        if (( first )); then
+            argos_item " $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
+            first=0
+        else
+            argos_item "-- $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
+        fi
     done <<< "$rows"
 
     if command -v ncdu >/dev/null 2>&1; then
-        echo "▶ ncdu /home | bash='$__DIR__/actions.sh disk-ncdu /home' terminal=true"
-        echo "▶ ncdu / | bash='$__DIR__/actions.sh disk-ncdu /' terminal=true"
-    else
-        argos_dim " ncdu not installed — apt install ncdu"
+        echo "--▶ ncdu /home | bash='$__DIR__/actions.sh disk-ncdu /home' terminal=true"
+        echo "--▶ ncdu / | bash='$__DIR__/actions.sh disk-ncdu /' terminal=true"
     fi
 }
 

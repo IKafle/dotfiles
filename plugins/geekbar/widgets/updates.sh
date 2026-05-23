@@ -41,10 +41,7 @@ widget_apt_bar() {
 }
 
 widget_apt_menu() {
-    if ! command -v apt >/dev/null 2>&1; then
-        argos_dim "󰚰 apt          not available"
-        return
-    fi
+    command -v apt >/dev/null 2>&1 || return
 
     local count sec color
     count=$(cache_get apt.count 3600 _apt_count)
@@ -52,10 +49,7 @@ widget_apt_menu() {
     count="${count:-0}"
     sec="${sec:-0}"
 
-    if (( count == 0 )); then
-        argos_dim "󰚰 Updates     none pending"
-        return
-    fi
+    (( count == 0 )) && return
 
     if (( sec > 0 )); then
         color="$COLOR_CRIT"
@@ -64,8 +58,8 @@ widget_apt_menu() {
     fi
     argos_item "$(printf '󰚰 Updates     %d pending  (%d security)' "$count" "$sec")" "$color"
 
-    echo "▶ Show upgradable | bash='$__DIR__/actions.sh apt-list' terminal=true"
-    echo "▶ apt upgrade (interactive) | bash='$__DIR__/actions.sh apt-upgrade' terminal=true"
-    echo "▶ Security only | bash='$__DIR__/actions.sh apt-security' terminal=true"
-    echo "▶ Refresh now | bash='$__DIR__/actions.sh apt-refresh' terminal=false"
+    echo "--▶ Show upgradable | bash='$__DIR__/actions.sh apt-list' terminal=true"
+    echo "--▶ apt upgrade (interactive) | bash='$__DIR__/actions.sh apt-upgrade' terminal=true"
+    echo "--▶ Security only | bash='$__DIR__/actions.sh apt-security' terminal=true"
+    echo "--▶ Refresh now | bash='$__DIR__/actions.sh apt-refresh' terminal=false"
 }

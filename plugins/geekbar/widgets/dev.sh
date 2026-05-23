@@ -8,11 +8,12 @@ widget_docker_bar() {
     command -v docker >/dev/null 2>&1 || return
     local n
     n=$(cache_get docker "$CACHE_TTL_SLOW" bash -c 'docker ps -q 2>/dev/null | wc -l')
-    [[ -z "$n" ]] && n=0
+    [[ -z "$n" || "$n" == "0" ]] && return
     printf ' %s' "$n"
 }
 
 widget_docker_menu() {
+    command -v docker >/dev/null 2>&1 || return
     local n
     n=$(cache_get docker "$CACHE_TTL_SLOW" bash -c 'docker ps -q 2>/dev/null | wc -l')
     if [[ -n "$n" && "$n" != "0" ]]; then
@@ -26,19 +27,17 @@ widget_docker_menu() {
                 local d_image_short="${d_image##*/}"
                 d_image_short="${d_image_short:0:25}"
                 local d_name_short="${d_name:0:20}"
-                argos_item "   $d_name_short  $d_image_short" "$COLOR_ACCENT"
-                argos_item "     $d_status" "$COLOR_DIM"
+                argos_item "--   $d_name_short  $d_image_short" "$COLOR_ACCENT"
+                argos_item "--     $d_status" "$COLOR_DIM"
             done <<< "$list"
         fi
-        echo "▶ docker ps (full) | bash='$__DIR__/actions.sh docker-ps' terminal=false"
-        echo "📊 docker stats | bash='$__DIR__/actions.sh docker-stats' terminal=false"
-        echo "🧹 Prune unused | bash='$__DIR__/actions.sh docker-prune' terminal=false"
+        echo "--▶ docker ps (full) | bash='$__DIR__/actions.sh docker-ps' terminal=false"
+        echo "--📊 docker stats | bash='$__DIR__/actions.sh docker-stats' terminal=false"
+        echo "--🧹 Prune unused | bash='$__DIR__/actions.sh docker-prune' terminal=false"
     else
         argos_item " Docker      idle" "$COLOR_DIM"
-        if command -v docker >/dev/null 2>&1; then
-            echo "📊 docker stats | bash='$__DIR__/actions.sh docker-stats' terminal=false"
-            echo "🧹 Prune unused | bash='$__DIR__/actions.sh docker-prune' terminal=false"
-        fi
+        echo "--📊 docker stats | bash='$__DIR__/actions.sh docker-stats' terminal=false"
+        echo "--🧹 Prune unused | bash='$__DIR__/actions.sh docker-prune' terminal=false"
     fi
 }
 
@@ -87,10 +86,7 @@ widget_ports_bar() {
 }
 
 widget_ports_menu() {
-    if ! command -v ss >/dev/null 2>&1; then
-        argos_item " ss not installed" "$COLOR_DIM"
-        return
-    fi
+    command -v ss >/dev/null 2>&1 || return
     local data; data=$(_ports_listening)
     declare -A live=()
     if [[ -n "$data" ]]; then
@@ -99,20 +95,24 @@ widget_ports_menu() {
             live["$p"]="${name:-?}"
         done <<< "$data"
     fi
+    local total
+    total=$(ss -tlnH 2>/dev/null | wc -l)
+
+    # Parent row: live count out of watchlist; system total in submenu.
+    local live_count=${#live[@]} watch_count=${#DEV_PORTS[@]}
+    local color="$COLOR_DIM"
+    (( live_count > 0 )) && color="$COLOR_OK"
+    argos_item " Ports       ${live_count}/${watch_count} watch  ·  ${total} total" "$color"
+
+    # Live watch hits first (only ports actually listening).
     local p
     for p in "${DEV_PORTS[@]}"; do
         if [[ -n "${live[$p]:-}" ]]; then
-            argos_item " $p      ${live[$p]}" "$COLOR_OK"
-        else
-            argos_item " $p      —" "$COLOR_DIM"
+            argos_item "-- $p      ${live[$p]}" "$COLOR_OK"
         fi
     done
-    argos_sep
-    local total
-    total=$(ss -tlnH 2>/dev/null | wc -l)
-    argos_item " Total       ${total} listening" "$COLOR_DIM"
-    echo "▶ Show all listening (ss -tln) | bash='$__DIR__/actions.sh ports-show' terminal=true"
-    echo "▶ What's on port… | bash='$__DIR__/actions.sh ports-prompt' terminal=true"
+    echo "--▶ Show all listening (ss -tln) | bash='$__DIR__/actions.sh ports-show' terminal=true"
+    echo "--▶ What's on port… | bash='$__DIR__/actions.sh ports-prompt' terminal=true"
 }
 
 # ── sshagent ─────────────────────────────────────────────────
@@ -147,22 +147,16 @@ widget_sshagent_bar() {
 }
 
 widget_sshagent_menu() {
-    if ! command -v ssh-add >/dev/null 2>&1; then
-        argos_dim "󰌆 ssh-agent   not installed"
-        return
-    fi
+    command -v ssh-add >/dev/null 2>&1 || return
     local n; n=$(_sshagent_status)
-    if [[ "$n" == "-1" ]]; then
-        argos_dim "󰌆 ssh-agent   not running"
-        return
-    fi
+    [[ "$n" == "-1" ]] && return
     if [[ "$n" == "0" ]]; then
         argos_item "󰌆 ssh-agent   0 identities" "$COLOR_WARN"
     else
         argos_item "󰌆 ssh-agent   $n identities" "$COLOR_OK"
     fi
-    echo "▶ ssh-add (load default key) | bash='$__DIR__/actions.sh ssh-add' terminal=true"
-    echo "▶ ssh-add -L (show pubkeys) | bash='$__DIR__/actions.sh ssh-add-list' terminal=true"
+    echo "--▶ ssh-add (load default key) | bash='$__DIR__/actions.sh ssh-add' terminal=true"
+    echo "--▶ ssh-add -L (show pubkeys) | bash='$__DIR__/actions.sh ssh-add-list' terminal=true"
 }
 
 # ── langver ──────────────────────────────────────────────────
@@ -224,9 +218,6 @@ widget_langver_bar() {
 widget_langver_menu() {
     _langver_any_installed || return
     local all; all=$(_langver_probe_all)
-    if [[ -z "$all" ]]; then
-        argos_dim " Versions     no version managers active"
-        return
-    fi
+    [[ -z "$all" ]] && return
     argos_item " Versions    $all" "$COLOR_ACCENT"
 }

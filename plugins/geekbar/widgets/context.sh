@@ -44,17 +44,14 @@ widget_git_bar() {
 widget_git_menu() {
     local raw branch ahead behind dirty path
     raw=$(_widget_git_raw)
-    if [[ -z "$raw" ]]; then
-        argos_item " Git         no active repo" "$COLOR_DIM"
-        return
-    fi
+    [[ -z "$raw" ]] && return
     IFS='|' read -r branch ahead behind dirty path <<< "$raw"
     local detail="$branch"
     (( ahead  > 0 )) && detail+=" ↑$ahead"
     (( behind > 0 )) && detail+=" ↓$behind"
     (( dirty  > 0 )) && detail+=" ●$dirty"
     argos_item " Git         $detail"
-    argos_item "   $path" "$COLOR_DIM"
+    argos_item "--  $path" "$COLOR_DIM"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -105,23 +102,17 @@ widget_k8s_bar() {
 }
 
 widget_k8s_menu() {
-    if ! command -v kubectl >/dev/null 2>&1; then
-        argos_item "󱃾 k8s          kubectl not installed" "$COLOR_DIM"
-        return
-    fi
+    command -v kubectl >/dev/null 2>&1 || return
     local ctx ns ctx_color="$COLOR_ACCENT"
     ctx=$(_widget_k8s_context)
+    [[ -z "$ctx" ]] && return
     ns=$(_widget_k8s_namespace)
-    if [[ -z "$ctx" ]]; then
-        argos_item "󱃾 k8s          no context configured" "$COLOR_DIM"
-        return
-    fi
     _widget_k8s_is_danger "$ctx" && ctx_color="$COLOR_CRIT"
     argos_item "󱃾 Context      $ctx" "$ctx_color"
-    argos_item "󰛢 Namespace    $ns"
-    echo "▶ Switch context | bash='$__DIR__/actions.sh k8s-switch' terminal=true"
-    echo "📋 get pods | bash='$__DIR__/actions.sh k8s-get-pods' terminal=true"
-    echo "📊 recent events | bash='$__DIR__/actions.sh k8s-events' terminal=true"
+    argos_item "--󰛢 Namespace    $ns"
+    echo "--▶ Switch context | bash='$__DIR__/actions.sh k8s-switch' terminal=true"
+    echo "--📋 get pods | bash='$__DIR__/actions.sh k8s-get-pods' terminal=true"
+    echo "--📊 recent events | bash='$__DIR__/actions.sh k8s-events' terminal=true"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -156,36 +147,32 @@ widget_cloud_bar() {
 }
 
 widget_cloud_menu() {
-    local aws gcp az shown=0
+    local aws gcp az shown=0 parent_emitted=0
     aws=$(_widget_cloud_aws)
     gcp=$(_widget_cloud_gcp)
     az=$(_widget_cloud_az)
 
     if [[ -n "$aws" && "$aws" != "<not" ]]; then
         argos_item " AWS profile  $aws"
+        parent_emitted=1
+        if command -v aws >/dev/null 2>&1; then
+            echo "--▶ aws sso login | bash='$__DIR__/actions.sh cloud-aws-sso' terminal=true"
+            echo "--▶ aws sts get-caller-identity | bash='$__DIR__/actions.sh cloud-aws-whoami' terminal=true"
+        fi
         shown=1
     fi
     if [[ -n "$gcp" ]]; then
         argos_item " GCP account  $gcp"
+        if command -v gcloud >/dev/null 2>&1; then
+            echo "--▶ gcloud auth list | bash='$__DIR__/actions.sh cloud-gcp-list' terminal=true"
+        fi
         shown=1
     fi
     if [[ -n "$az" ]]; then
         argos_item " Azure sub    $az"
         shown=1
     fi
-
-    if (( shown == 0 )); then
-        argos_item " Cloud        no profile detected" "$COLOR_DIM"
-        return
-    fi
-
-    if command -v aws >/dev/null 2>&1; then
-        echo "▶ aws sso login | bash='$__DIR__/actions.sh cloud-aws-sso' terminal=true"
-        echo "▶ aws sts get-caller-identity | bash='$__DIR__/actions.sh cloud-aws-whoami' terminal=true"
-    fi
-    if command -v gcloud >/dev/null 2>&1; then
-        echo "▶ gcloud auth list | bash='$__DIR__/actions.sh cloud-gcp-list' terminal=true"
-    fi
+    (( shown == 0 )) && return
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -224,11 +211,8 @@ widget_vpn_bar() {
 widget_vpn_menu() {
     local name
     name=$(_widget_vpn_detect)
-    if [[ -z "$name" ]]; then
-        argos_item "󰦝 VPN          not connected" "$COLOR_DIM"
-        return
-    fi
+    [[ -z "$name" ]] && return
     argos_item "󰦝 VPN          $name" "$COLOR_OK"
-    echo "▶ Disconnect | bash='$__DIR__/actions.sh vpn-disconnect $name' terminal=true"
-    echo "▶ Show route table | bash='$__DIR__/actions.sh vpn-routes' terminal=true"
+    echo "--▶ Disconnect | bash='$__DIR__/actions.sh vpn-disconnect $name' terminal=true"
+    echo "--▶ Show route table | bash='$__DIR__/actions.sh vpn-routes' terminal=true"
 }

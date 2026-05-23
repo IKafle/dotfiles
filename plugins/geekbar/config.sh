@@ -25,15 +25,15 @@ BAR_WIDGETS=(
     ram          # heartbeat (spark + used GB)
     disk         # heartbeat — worst-mount used% (always; "!" prefix at CRIT)
     net          # heartbeat (rx/tx) — only when an interface is up
-    wifi         # heartbeat — signal bars + SSID (when on wifi)
-    docker       # heartbeat — container count (always when docker installed)
+    wifi         # heartbeat — signal bars only on bar (SSID stays in menu)
+    docker       # heartbeat — container count, only when ≥1
     battery      # heartbeat — laptop only; always-on ("!" prefix when CRIT)
-    uptime       # heartbeat — compact uptime ("12m", "3h", "4d")
     top_proc     # alarm — only when CPU% or MEM% above threshold
     apt          # alarm — only when apt updates are pending
     iowait       # alarm — only when %iowait ≥ IOWAIT_PCT_WARN
     sshagent     # alarm — only when ssh-agent has 0 identities
     mic          # alarm — only when mic is muted
+    # uptime     # menu-only by default; opt-in if you want it on the bar
     # load       # menu-only by default
     # weather    # menu-only by default; uncomment to add to bar
     # nepse      # opt-in: uncomment to show NEPSE during market hours
