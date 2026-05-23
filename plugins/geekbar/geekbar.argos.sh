@@ -23,7 +23,7 @@ done
 # ═════════════════════════════════════════════════════════════
 
 BAR=""
-_bar_sep="  <span color=\"$COLOR_DIM\">·</span>  "
+_bar_sep="    "
 for w in "${BAR_WIDGETS[@]}"; do
     if ! declare -F "widget_${w}_bar" >/dev/null; then
         continue

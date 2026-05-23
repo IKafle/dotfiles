@@ -61,9 +61,7 @@ widget_ports_bar() {
     done <<< "$data"
     (( ${#ports[@]} == 0 )) && return
     local shown=("${ports[@]:0:5}")
-    local suffix=""
-    (( ${#ports[@]} > 5 )) && suffix="…"
-    printf ' %d %s%s' "${#ports[@]}" "${shown[*]}" "$suffix"
+    printf ' %d %s' "${#ports[@]}" "${shown[*]}"
 }
 
 widget_ports_menu() {
