@@ -74,6 +74,37 @@ case "$action" in
     docker-prune)
         run_in_term "docker system prune -f"
         ;;
+    k8s-switch)
+        run_in_term "kubectl config get-contexts && echo && read -rp 'context to switch to: ' c && kubectl config use-context \"\$c\""
+        ;;
+    k8s-get-pods)
+        run_in_term "kubectl get pods -A"
+        ;;
+    k8s-events)
+        run_in_term "kubectl get events -A --sort-by=.lastTimestamp | tail -50"
+        ;;
+    cloud-aws-sso)
+        run_in_term "aws sso login"
+        ;;
+    cloud-aws-whoami)
+        run_in_term "aws sts get-caller-identity"
+        ;;
+    cloud-gcp-list)
+        run_in_term "gcloud auth list"
+        ;;
+    vpn-disconnect)
+        name="${1:-}"
+        [[ -n "$name" ]] && run_in_term "nmcli connection down '$name'"
+        ;;
+    vpn-routes)
+        run_in_term "ip route show"
+        ;;
+    ports-show)
+        run_in_term "ss -tln | less -S"
+        ;;
+    ports-prompt)
+        run_in_term 'read -rp "Port number: " p; [[ -z "$p" ]] && exit 0; echo; ss -tlnp "sport = :$p" 2>/dev/null || ss -tlnp | grep -E ":$p[[:space:]]"'
+        ;;
     open-url)
         xdg-open "$1" >/dev/null 2>&1 &
         ;;

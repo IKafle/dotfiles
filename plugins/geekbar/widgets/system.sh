@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
 #  geekbar :: widgets/system
-#  uptime · cpu · ram · load · top_proc
+#  uptime · cpu · ram · load · top_proc · disk
 # ─────────────────────────────────────────────────────────────
 
 # ── uptime ───────────────────────────────────────────────────
@@ -112,4 +112,69 @@ widget_top_proc_menu() {
         IFS='|' read -r name pid cpu mem args <<< "$raw"
         argos_item " Top MEM     ${name} (${mem}%) pid=${pid}"
     fi
+}
+
+# ── disk ─────────────────────────────────────────────────────
+# Cached raw df output: mount, used (1K), size (1K), pct%.
+# Filters out pseudo/transient mounts; callers parse from here.
+_disk_raw() {
+    cache_get disk.usage 30 df --local --output=target,used,size,pcent \
+        | awk 'NR>1 {
+            t=$1
+            if (t ~ /^\/boot/)     next
+            if (t ~ /^\/snap/)     next
+            if (t ~ /^\/var\/snap/) next
+            if (t ~ /^\/run/)      next
+            if (t ~ /^\/dev/)      next
+            if (t ~ /^\/proc/)     next
+            if (t ~ /^\/sys/)      next
+            if (t ~ /^\/tmp/)      next
+            pct=$4; sub(/%/, "", pct)
+            print t, $2, $3, pct
+        }'
+}
+
+widget_disk_bar() {
+    local raw worst_mount="" worst_pct=0 mount used size pct
+    raw=$(_disk_raw)
+    [[ -z "$raw" ]] && return
+    while read -r mount used size pct; do
+        [[ -z "$mount" ]] && continue
+        if (( pct >= DISK_PCT_WARN )) && (( pct > worst_pct )); then
+            worst_pct=$pct
+            worst_mount=$mount
+        fi
+    done <<< "$raw"
+    [[ -z "$worst_mount" ]] && return
+
+    local short
+    if [[ "$worst_mount" == "/" ]]; then
+        short="/"
+    else
+        short="${worst_mount##*/}"
+    fi
+    if (( worst_pct >= DISK_PCT_CRIT )); then
+        printf '!  %s %d%%' "$short" "$worst_pct"
+    else
+        printf ' %s %d%%' "$short" "$worst_pct"
+    fi
+}
+
+widget_disk_menu() {
+    local raw rows mount used size pct color used_b size_b used_h size_h
+    raw=$(_disk_raw)
+    if [[ -z "$raw" ]]; then
+        argos_dim " Disk         no tracked mounts"
+        return
+    fi
+    rows=$(printf "%s\n" "$raw" | sort -k4 -n -r)
+    while read -r mount used size pct; do
+        [[ -z "$mount" ]] && continue
+        used_b=$(( used * 1024 ))
+        size_b=$(( size * 1024 ))
+        used_h=$(human_bytes "$used_b")
+        size_h=$(human_bytes "$size_b")
+        color=$(color_for "$pct" "$DISK_PCT_WARN" "$DISK_PCT_CRIT")
+        argos_item " $(printf '%-12s %s/%s  (%d%%)' "$mount" "$used_h" "$size_h" "$pct")" "$color"
+    done <<< "$rows"
 }
