@@ -140,7 +140,8 @@ if [[ $- == *i* ]]; then
     if [[ "${BX_MOTD_SHOWN:-0}" == "1" ]]; then
         __motd_reload
     else
-        export BX_MOTD_SHOWN=1
+        # NOT exported — child shells should show the full panel, not "reloaded".
+        BX_MOTD_SHOWN=1
         __motd_full
     fi
 fi

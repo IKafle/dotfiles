@@ -11,10 +11,14 @@
 #   BX_MODULES_LOADED   count of modules sourced successfully this shell
 #   BX_MODULES_FAILED   comma-separated list of modules that failed (empty on success)
 #
-# Source guard prevents double-loading. To re-source on demand, run `bx reload`.
+# Source guard prevents double-loading WITHIN the same bash process. We use
+# $BASHPID (not an exported var) so the guard does not leak into child shells
+# — every new interactive bash from the desktop session must run modules from
+# scratch, otherwise its motd / functions / aliases never get set up.
+# To re-source on demand in the same shell, run `bx reload`.
 
 # ── Source guard ──────────────────────────────────────────────────
-[[ -n "${BX_VERSION:-}" ]] && return 0
+[[ "${_BX_INIT_PID:-}" == "$BASHPID" ]] && return 0
 
 # ── Shell guard ───────────────────────────────────────────────────
 # We use bash arrays, [[ ]], $BASH_SOURCE. Bail cleanly on non-bash.
@@ -24,6 +28,8 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 # ── Constants ─────────────────────────────────────────────────────
+# _BX_INIT_PID is intentionally NOT exported — see source guard above.
+_BX_INIT_PID=$BASHPID
 export BX_VERSION="1.0.0"
 export BX_HOME="${BX_HOME:-$HOME/.bin}"
 export BX_LIB="$BX_HOME/lib"

@@ -286,11 +286,11 @@ cmd_reload() {
     # function shim defined in init.sh).
     if [[ -t 1 ]]; then
         bx_info "to reload THIS shell, run:"
-        printf '\n    unset BX_VERSION BX_MOTD_SHOWN && . ~/.bin/init.sh\n\n' >&2
-        bx_dim "tip: define a shell alias  alias bxr='unset BX_VERSION BX_MOTD_SHOWN && . ~/.bin/init.sh'"
+        printf '\n    unset _BX_INIT_PID BX_MOTD_SHOWN && . ~/.bin/init.sh\n\n' >&2
+        bx_dim "tip: define a shell alias  alias bxr='unset _BX_INIT_PID BX_MOTD_SHOWN && . ~/.bin/init.sh'"
     else
         # Caller piped us — emit the commands raw so they can `eval $(bx reload)`.
-        printf 'unset BX_VERSION BX_MOTD_SHOWN; . %s/init.sh\n' "$BX_HOME"
+        printf 'unset _BX_INIT_PID BX_MOTD_SHOWN; . %s/init.sh\n' "$BX_HOME"
     fi
 }
 
@@ -450,17 +450,28 @@ cmd_selftest() {
     _bx_st_ok() { bx_ok "$1"; }
     _bx_st_fail() { bx_err "$1"; fails=$(( fails + 1 )); }
 
-    # 1. Subshell load — modules source cleanly with no failures.
+    # 1. Subshell load in CLEAN env — modules source cleanly with no failures.
+    # We strip the inherited env so the guard doesn't short-circuit (catching
+    # the kind of leak that breaks new terminals spawned from the desktop).
     local out
-    out=$(bash -c '. "'"$BX_HOME"'"/init.sh && echo "$BX_MODULES_LOADED|${BX_MODULES_FAILED:-}"' 2>&1)
+    out=$(env -i HOME="$HOME" TERM=dumb PATH="/usr/bin:/bin" bash -c '. "'"$BX_HOME"'"/init.sh && echo "$BX_MODULES_LOADED|${BX_MODULES_FAILED:-}"' 2>&1)
     local loaded="${out%%|*}" failed="${out#*|}"
     if [[ "$loaded" =~ ^[0-9]+$ ]] && (( loaded > 0 )) && [[ -z "$failed" ]]; then
-        _bx_st_ok "subshell load: $loaded modules, no failures"
+        _bx_st_ok "clean-env subshell load: $loaded modules, no failures"
     else
-        _bx_st_fail "subshell load broken: $out"
+        _bx_st_fail "clean-env subshell load broken: $out"
     fi
 
-    # 2. Double-source idempotency — BX_VERSION guard returns 0 on second source.
+    # 2. Modules also load when parent env carries BX_VARS — proves the guard
+    # is shell-PID-scoped, not environment-variable-scoped.
+    out=$(BX_VERSION=1.0.0 BX_MODULES_LOADED=0 bash -c '. "'"$BX_HOME"'"/init.sh && type -t shortcuts' 2>&1)
+    if [[ "$out" == "function" ]]; then
+        _bx_st_ok "modules load even with inherited BX_VERSION"
+    else
+        _bx_st_fail "guard leak: modules skipped when BX_VERSION inherited"
+    fi
+
+    # 3. Double-source idempotency — PID guard returns 0 on second source.
     if bash -c '. "'"$BX_HOME"'"/init.sh; . "'"$BX_HOME"'"/init.sh' >/dev/null 2>&1; then
         _bx_st_ok "double-source is idempotent"
     else

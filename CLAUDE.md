@@ -124,6 +124,16 @@ After `init.sh` runs, these env vars are set:
 
 The MOTD module reads these to print the `bx: N modules loaded` line.
 
+**The shell guard is PID-scoped, not env-scoped**
+
+`init.sh` uses `_BX_INIT_PID=$BASHPID` (deliberately **not exported**) as its
+re-source guard. Exported guards leak into child shells — meaning every new
+terminal spawned from a desktop session that already loaded `~/.bin/` would
+short-circuit and never load its own modules (no motd, no functions, no
+aliases). Same-shell re-sources still no-op because `_BX_INIT_PID` matches
+`$BASHPID`; new shells get a fresh PID and reload. If you add another guard,
+follow the same rule: tie it to `$BASHPID`, leave it unexported.
+
 ---
 
 ## Adding a new automation — step by step
