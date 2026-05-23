@@ -48,6 +48,12 @@ safe_cmd() {
 # ── cache_get <key> <ttl_seconds> <producer_cmd...>
 # Runs producer only if cached value is missing or older than ttl.
 # Producer's stdout becomes the cached value.
+#
+# Non-destructive on failure: a failed or empty producer never clobbers
+# the existing cache file. Without this, a 2 s Argos refresh that hits
+# a network timeout (DNS / ipapi.co / weather) would empty the cache and
+# the dropdown row would vanish until the next successful fetch — visible
+# to the user as rows flickering while the menu is open.
 cache_get() {
     local key="$1" ttl="$2"; shift 2
     local f="$GB_CACHE_DIR/$key"
@@ -57,8 +63,18 @@ cache_get() {
             cat "$f"; return
         fi
     fi
-    "$@" > "$f" 2>/dev/null || echo "" > "$f"
-    cat "$f"
+    local tmp
+    tmp=$(mktemp "$GB_CACHE_DIR/.${key//\//_}.XXXXXX" 2>/dev/null) \
+        || { cat "$f" 2>/dev/null; return; }
+    if "$@" > "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
+        mv -f "$tmp" "$f"
+    else
+        rm -f "$tmp"
+        # Reset the TTL clock so we don't re-attempt the failing producer
+        # on every 2 s refresh; serve stale until the next natural expiry.
+        [[ -f "$f" ]] && touch "$f"
+    fi
+    cat "$f" 2>/dev/null
 }
 
 # ── sparkline <current_value> [max_samples=8]
