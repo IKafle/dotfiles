@@ -110,6 +110,9 @@ alias di='docker images'
 alias dc='docker compose'
 alias dcu='docker compose up -d'
 alias dcd='docker compose down'
+alias use-sandbox='use_sandbox'              # switch to sandbox (Docker Desktop)
+alias use-docker='use_docker'                # switch to docker engine (main dev)
+alias docker-status='docker_status'          # show docker context status
 # dlogs() is defined in dev-tools (a function, not an alias, so it can show usage)
 
 # ── Python ────────────────────────────────────────────────────
