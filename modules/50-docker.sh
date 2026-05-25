@@ -6,10 +6,10 @@
   #
   #   . ~/.bin/modules/50-docker.sh
   #
-  # Functions provided:
-  #   use_sandbox    switch to Docker Desktop (isolated sandbox for AI agents)
-  #   use_docker     switch to Docker Engine (normal dev environment)
-  #   docker_status  show current context, all contexts, and guidance
+  # Aliases provided:
+  #   use-sandbox    switch to Docker Desktop (isolated sandbox for AI agents)
+  #   use-docker     switch to Docker Engine (normal dev environment)
+  #   docker-status  show current context, all contexts, and guidance
   #
   # Context names (registered by Docker):
   #   default        → Docker Engine (system socket)
@@ -245,8 +245,8 @@
 
   # ── Public functions ───────────────────────────────────────────────────────
 
-  if _dcs_can_define use_sandbox; then
-    use_sandbox() {
+  if _dcs_can_define _docker_use_sandbox; then
+    _docker_use_sandbox() {
       echo "───────────────────────────────────────────────────────────"
       echo "Switching to sandbox environment (Docker Desktop)"
       echo "───────────────────────────────────────────────────────────"
@@ -283,13 +283,13 @@
 
       echo "✓ Sandbox is ready."
       echo "  AI agents run here will only have access to provided resources."
-      echo "  Switch back to main with: use_docker"
+      echo "  Switch back to main with: use-docker"
       echo ""
     }
   fi
 
-  if _dcs_can_define use_docker; then
-    use_docker() {
+  if _dcs_can_define _docker_use_docker; then
+    _docker_use_docker() {
       echo "───────────────────────────────────────────────────────────"
       echo "Switching to Docker Engine environment"
       echo "───────────────────────────────────────────────────────────"
@@ -324,13 +324,13 @@
 
       echo "✓ Docker Engine is ready."
       echo "  Normal development workflow is active."
-      echo "  Switch to sandbox with: use_sandbox"
+      echo "  Switch to sandbox with: use-sandbox"
       echo ""
     }
   fi
 
-  if _dcs_can_define docker_status; then
-    docker_status() {
+  if _dcs_can_define _docker_status; then
+    _docker_status() {
       echo "───────────────────────────────────────────────────────────"
       echo "Docker context status"
       echo "───────────────────────────────────────────────────────────"
@@ -384,9 +384,9 @@
 
       echo ""
       echo "Commands:"
-      echo "  use_sandbox     switch to Docker Desktop (isolated sandbox / AI agents)"
-      echo "  use_docker      switch to Docker Engine  (normal development)"
-      echo "  docker_status   show this status panel"
+      echo "  use-sandbox     switch to Docker Desktop (isolated sandbox / AI agents)"
+      echo "  use-docker      switch to Docker Engine  (normal development)"
+      echo "  docker-status   show this status panel"
       echo "───────────────────────────────────────────────────────────"
       echo ""
     }
