@@ -503,6 +503,12 @@ shortcuts() {
         _cmd "iplocal"               "local network IP address"
         _cmd "portcheck <host> <p>"  "check if remote host:port is reachable"
 
+        _sec "Todo"
+        _cmd "today [-s|--show]"     "open today's list in editor  (-s prints it)"
+        _cmd "td <text>"             "append a task to the backlog"
+        _cmd "tdone"                 "sweep checked tasks into done.md"
+        _cmd "tpush"                 "push the todo repo to its remote"
+
         _sec "Productivity"
         _cmd "countdown <t> [msg]"   "timer — e.g.  countdown 25m 'Pomodoro done'"
         _cmd "note [text]"           "append timestamped note; no args = read today"
