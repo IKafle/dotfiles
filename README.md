@@ -78,20 +78,24 @@ Every new automation belongs here. That's the rule.
 - `~/.bin/init.sh` never ran → red `⚠ bx: not loaded`.
 - `bx doctor` prints the full diagnosis.
 
-## Todo panel
+## MOTD dashboard
 
-New terminals (and `bx reload`) render a todo panel in the MOTD: a numbered
-priority list of today's tasks (completed ones collapse to a dimmed `✓`), a
-completion bar, and a `backlog N · done today N` footer. The panel is pure
-presentation — it consumes `today --data` from the `~/todo` app (ADR-0003) and
-never parses `todo.md`. With no plan it shows `no plan yet — run today`; all
-done shows `all done ✓`. Skipped silently when the todo app isn't enabled.
+New terminals (and `bx reload`) render a dashboard MOTD: a master header
+(user@host + date), then three content columns — **vitals** (os/kernel/load,
+mem/disk bars, ip, bx status, top commands), **today** (the todo card), and
+**shortcuts** (the cheatsheet). The today card consumes `today --data` from the
+`~/todo` app (ADR-0003) and is pure presentation — it never parses `todo.md`. It
+shows a completion bar, the focus task marked `▸`, dimmed `✓` for done, and a
+`backlog N · done today N` footer; with no plan it reads `no plan yet — run
+today`, and `all done ✓` when the list is clear. The today column is skipped
+silently when the todo app isn't enabled.
 
-The layout is responsive, chosen per render from the live terminal width: at
-≥135 columns the panel sits **beside** the system panel as equal halves split
-by a `│` divider at the midpoint; below that it falls back to stacking
-full-width underneath. Resize, then open a new terminal (or `bx reload`) to
-switch layouts.
+The layout is responsive, recomputed per render from the live terminal width.
+The columns are **spread evenly** across the whole screen — equal left margin,
+gutters and right margin — rather than hugging one edge. When the width can't
+hold three columns it falls back to two (vitals+shortcuts | today), then to a
+full-width stacked layout on narrow terminals. Resize, then open a new terminal
+(or `bx reload`) to switch tiers.
 
 ## Tools (one-shot installers)
 
