@@ -18,3 +18,6 @@ local/
 
 # Runtime state
 /tmp/.bx-load-err.*
+
+# Local planning scratch (issue breakdowns, not part of the bx lifecycle)
+/issues/
