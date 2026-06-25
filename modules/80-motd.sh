@@ -8,15 +8,17 @@ _BX_MOD_motd_LOADED=1
 # Renders the todo panel from `today --data` rows on stdin (ADR-0003): the app
 # owns data extraction, this owns presentation. Never parses todo.md.
 __motd_todo_panel() {
-    local R=$'\e[0m' B=$'\e[1m' CY=$'\e[1;36m' GN=$'\e[32m' GR=$'\e[90m'
+    local R=$'\e[0m' B=$'\e[1m' CY=$'\e[1;36m' CN=$'\e[36m' GN=$'\e[32m' GR=$'\e[90m'
 
-    # Dim +project / @context tags so they don't dominate the task text.
-    _dim_tags() {
+    # Color tags so they read at a glance without drowning the task text:
+    # +project in cyan (ties to the panel accent), @context in muted gray.
+    _color_tags() {
         local word out=""
         for word in $1; do
             case "$word" in
-                +?*|@?*) out+="${GR}${word}${R} " ;;
-                *)       out+="${word} " ;;
+                +?*) out+="${CN}${word}${R} " ;;
+                @?*) out+="${GR}${word}${R} " ;;
+                *)   out+="${word} " ;;
             esac
         done
         printf '%s' "${out% }"
@@ -33,19 +35,52 @@ __motd_todo_panel() {
         esac
     done
 
+    # Split into pending / done, preserving file order (= priority order).
     local total=${#texts[@]} done_count=0 i
+    local -a pending=() finished=()
     for (( i=0; i<total; i++ )); do
-        [[ "${states[i]}" == "1" ]] && done_count=$(( done_count + 1 ))
+        if [[ "${states[i]}" == "1" ]]; then
+            finished+=("${texts[i]}"); done_count=$(( done_count + 1 ))
+        else
+            pending+=("${texts[i]}")
+        fi
     done
+    local pend_n=${#pending[@]}
+
+    # Open with a blank line so this panel's header lands on the same row as the
+    # system panel's header when composed side-by-side (that panel opens with a
+    # blank line too). Closes with a matching blank — same top/bottom envelope.
+    printf '\n'
+
+    # ── Header ────────────────────────────────────────────────
+    # A title bar: ◆ accent + name on the left, a status badge right-aligned to
+    # the panel's content width (PW) for a clean right margin. The badge is
+    # stateful — a muted "N left" while there's work, a green "all done ✓" when
+    # the list is clear. Same name-then-trailing-detail rhythm as the left header.
+    local PW=42 badge_raw="" badge_fmt=""
+    if (( total == 0 )); then
+        :
+    elif (( pend_n == 0 )); then
+        badge_raw="all done ✓"; badge_fmt="${GN}${B}all done ✓${R}"
+    else
+        badge_raw="$pend_n left"; badge_fmt="${GR}$pend_n left${R}"
+    fi
+    if [[ -n "$badge_raw" ]]; then
+        local hpad=$(( PW - 7 - ${#badge_raw} ))   # "◆ today" is 7 visible cols
+        (( hpad < 1 )) && hpad=1
+        printf "  ${CY}${B}◆ today${R}%*s%s\n" "$hpad" "" "$badge_fmt"
+    else
+        printf "  ${CY}${B}◆ today${R}\n"
+    fi
 
     if (( total == 0 )); then
-        printf "  ${GR}no plan yet — run today${R}\n"
-    elif (( done_count == total )); then
-        printf "  ${GN}${B}all done ✓${R}\n"
+        printf '\n'
+        printf "  ${GR}no plan yet — run ${R}${B}today${R}\n"
     else
+        # ── Progress ──────────────────────────────────────────
+        # Completion bar built like the mem/disk bars (same █/░ glyphs), but
+        # filled green at any level — more-done is good, opposite of pressure.
         local pct=$(( done_count * 100 / total ))
-        # Completion bar: same █/░ glyphs as the mem/disk bars, but filled green
-        # at any level — more-done is good here, opposite of resource pressure.
         local w=10 f e bar=""
         f=$(( pct * w / 100 )); e=$(( w - f ))
         bar="${GN}"
@@ -53,26 +88,53 @@ __motd_todo_panel() {
         bar+="${GR}"
         for (( i=0; i<e; i++ )); do bar+="░"; done
         bar+="${R}"
-        printf "  ${GR}today${R}   %s  ${B}%d${R}${GR}/${R}${B}%d${R}\n" "$bar" "$done_count" "$total"
+        printf '\n'
+        printf "  ${GR}done${R}    %s  ${GN}${B}%3d%%${R}   ${B}%d${R}${GR}/${R}${B}%d${R}\n" \
+            "$bar" "$pct" "$done_count" "$total"
 
-        local n=0 shown=0 cap=10
-        for (( i=0; i<total; i++ )); do
-            (( shown >= cap )) && break
-            if [[ "${states[i]}" == "1" ]]; then
-                printf "  ${GR}✓  %s${R}\n" "${texts[i]}"
-            else
-                n=$(( n + 1 ))
-                printf "  ${CY}${B}%d${R}  %s\n" "$n" "$(_dim_tags "${texts[i]}")"
-            fi
-            shown=$(( shown + 1 ))
-        done
-        (( total > shown )) && printf "  ${GR}+%d more — run today${R}\n" "$(( total - shown ))"
+        # ── Pending ───────────────────────────────────────────
+        # One glyph language, text aligned at col 5: ▸ marks the focus (top of
+        # the list = highest priority, since the app has no labels), · the rest.
+        # A blank line between entries gives the list room to breathe.
+        if (( pend_n > 0 )); then
+            printf '\n'
+            local pcap=6 shown=0
+            for (( i=0; i<pend_n; i++ )); do
+                (( shown >= pcap )) && break
+                (( shown > 0 )) && printf '\n'
+                if (( i == 0 )); then
+                    printf "  ${CY}${B}▸${R}  ${B}%s${R}\n" "$(_color_tags "${pending[i]}")"
+                else
+                    printf "  ${GR}·${R}  %s\n" "$(_color_tags "${pending[i]}")"
+                fi
+                shown=$(( shown + 1 ))
+            done
+            (( pend_n > shown )) && \
+                printf "\n  ${GR}   +%d more — run ${R}${B}today${R}\n" "$(( pend_n - shown ))"
+        fi
+
+        # ── Done today ────────────────────────────────────────
+        # Grouped below pending and fully dimmed — finished work recedes.
+        if (( done_count > 0 )); then
+            printf '\n'
+            local dcap=4 dshown=0
+            for (( i=0; i<done_count; i++ )); do
+                (( dshown >= dcap )) && break
+                printf "  ${GN}✓${R}  ${GR}%s${R}\n" "${finished[i]}"
+                dshown=$(( dshown + 1 ))
+            done
+            (( done_count > dshown )) && \
+                printf "  ${GR}   +%d more done${R}\n" "$(( done_count - dshown ))"
+        fi
     fi
 
-    printf "  ${GR}backlog ${R}${B}%d${R}${GR} · done today ${R}${B}%d${R}\n" \
+    # ── Summary ───────────────────────────────────────────────
+    printf '\n'
+    printf "  ${GR}backlog${R} ${B}%d${R}    ${GR}done today${R} ${B}%d${R}\n" \
         "$backlog" "$done_today"
+    printf '\n'
 
-    unset -f _dim_tags
+    unset -f _color_tags
 }
 
 # Visible width of a string, ignoring ANSI SGR escapes (pure bash, no fork).
@@ -85,13 +147,12 @@ __motd_vislen() {
     printf '%s' "${#stripped}"
 }
 
-# Compose two text blocks side-by-side: LEFT in a half-width left column, a `│`
-# divider at COLUMNS/2, RIGHT in the right half. Left lines are padded (ANSI
-# aware) so the divider aligns; the left panel is emitted verbatim, never
-# reflowed. Right runs out before left when it has fewer lines.
+# Compose two text blocks side-by-side: LEFT padded to COLUMNS/2, then a
+# whitespace gutter, then RIGHT — no divider rule. Left lines are padded (ANSI
+# aware) to a common edge so the right column aligns; the left panel is emitted
+# verbatim, never reflowed. Right runs out before left when it has fewer lines.
 __motd_compose() {
     local left=$1 right=$2 cols=$3
-    local R=$'\e[0m' GR=$'\e[90m'
     local half=$(( cols / 2 ))
 
     local -a llines=() rlines=()
@@ -107,7 +168,10 @@ __motd_compose() {
         vis=$(__motd_vislen "$ll")
         pad=$(( half - vis ))
         (( pad < 0 )) && pad=0
-        printf '%s%*s%s│ %s\n' "$ll" "$pad" "" "$GR" "${R}${rl}"
+        # No divider rule — the left column is padded to a common edge and a
+        # whitespace gutter carries the split, so the columns separate by
+        # alignment and space rather than a drawn line.
+        printf '%s%*s   %s\n' "$ll" "$pad" "" "$rl"
     done
 }
 
@@ -124,8 +188,6 @@ __motd_system_panel() {
     local YL=$'\e[33m'     # yellow      — warn
     local RD=$'\e[31m'     # red         — critical / inbox alert
     local GR=$'\e[90m'     # dark gray   — labels / separators / bar empty
-
-    local SEP="${GR}$(printf '%.0s─' {1..54})${R}"
 
     # ── Gather ────────────────────────────────────────────────
     local os kernel up load_str ip inbox_count
@@ -200,26 +262,41 @@ __motd_system_panel() {
     }
 
     # ── Header ────────────────────────────────────────────────
+    # Same title-bar structure as the todo panel: ◆ accent + bold name on the
+    # left, metadata (the date) right-aligned to the panel's content width (LW),
+    # so the two panels read as sibling cards composed side by side.
+    local LW=56 hhost hdate hleft hpad
+    hhost="$(hostname -s)"
+    hdate="$(date '+%a %d %b  %H:%M')"
+    printf -v hleft "◆ %s@%s" "$USER" "$hhost"
+    hpad=$(( LW - ${#hleft} - ${#hdate} ))
+    (( hpad < 2 )) && hpad=2
     printf '\n'
-    printf "  ${CY}${B}%s${GR}@${CY}%s${R}   ${GR}%s${R}\n" \
-        "$USER" "$(hostname -s)" "$(date '+%a %d %b  %H:%M')"
-    printf "  %s\n" "$SEP"
+    printf "  ${CY}${B}◆ %s${GR}@${CY}%s${R}%*s${GR}%s${R}\n" \
+        "$USER" "$hhost" "$hpad" "" "$hdate"
+    printf '\n'
 
     # ── System info ───────────────────────────────────────────
+    # Airy rhythm to match the todo panel: one blank line between entries, two
+    # between groups so the grouping (identity · resources) stays visible.
     printf "  ${GR}os${R}      %s\n" "$os"
-    printf "  ${GR}kernel${R}  %s\n" "$kernel"
-    printf "  ${GR}uptime${R}  %-26s  ${GR}load${R}  %s\n" "$up" "$load_str"
     printf '\n'
+    printf "  ${GR}kernel${R}  %s\n" "$kernel"
+    printf '\n'
+    printf "  ${GR}uptime${R}  %-26s  ${GR}load${R}  %s\n" "$up" "$load_str"
+    printf '\n\n'
     printf "  ${GR}mem${R}     %s  %s  ${B}%sG${R} · %sG\n" \
         "$(_bar $mp)" "$(_pct $mp)" "$mug" "$mtg"
+    printf '\n'
     printf "  ${GR}disk${R}    %s  %s  ${B}%s${R} · %s\n" \
         "$(_bar $dp)" "$(_pct $dp)" "$du" "$dt"
+    printf '\n'
     printf "  ${GR}ip${R}      %s\n" "$ip"
-
+    printf '\n'
     printf "  ${GR}status${R}  %s\n" "$bx_line"
 
     if (( inbox_count > 0 )); then
-        printf '\n'
+        printf '\n\n'
         printf "  ${RD}${B}⚑  %d item(s) waiting in ~/vault/inbox${R}\n" "$inbox_count"
     fi
 
@@ -228,7 +305,7 @@ __motd_system_panel() {
         local top_out
         top_out=$(_bx_cmdlog_top 3 3600)
         if [[ -n "$top_out" ]]; then
-            printf '\n'
+            printf '\n\n'
             local first=1 count cmd
             while IFS=$'\t' read -r count cmd; do
                 [[ -z "$count" ]] && continue
@@ -249,25 +326,30 @@ __motd_system_panel() {
     # ── Todo panel (stacked) ──────────────────────────────────
     # Only when pre-rendered todo text was passed in (stacked layout). In
     # two-column mode the orchestrator composes it beside this block instead.
+    # The block carries its own leading blank + header, so it needs no extra
+    # separator here — printing it directly keeps the whitespace rhythm.
     if [[ -n "$todo_block" ]]; then
-        printf '\n'
-        printf "  %s\n" "$SEP"
         printf '%s\n' "$todo_block"
     fi
 
     # ── Shortcuts ─────────────────────────────────────────────
-    printf '\n'
-    printf "  %s\n" "$SEP"
+    printf '\n\n'
+    # Themed clusters — navigate/version · develop/track · inspect · configure
+    # — one blank line apart, rows tight within a cluster. Light grouping for a
+    # reference legend, echoing the stats' grouping without bloating the grid.
     printf "  ${CY}nav   ${R}..  ...  ....  -    dev  vault  inbox\n"
     printf "  ${CY}git   ${R}gst  gss  gaa  gcmsg  gp  gl  gco  gcb  gsync  gparent  nah\n"
+    printf '\n'
     printf "  ${CY}code  ${R}mkcd  extract  serve  activate  countdown  note\n"
     printf "  ${CY}todo  ${R}today  td  tdone  tpush\n"
+    printf '\n'
     printf "  ${CY}net   ${R}netspeed  ports  myip  portcheck\n"
     printf "  ${CY}sys   ${R}battery  psg  dsize  ff\n"
-    printf "  ${CY}edit  ${R}en  al  fun  con  pr                   reload\n"
+    printf '\n'
+    printf "  ${CY}edit  ${R}en  al  fun  con  pr  reload\n"
     printf "  ${CY}dock  ${R}dps  dpsa  dcu  dcd  dlogs  docker_clean\n"
     printf "  ${CY}bx    ${R}bx ls  bx enable  bx disable  bx reload  bx doctor  bx help\n"
-    printf "  %s\n" "$SEP"
+    printf '\n'
     printf "  ${GR}type ${R}${B}shortcuts${R}${GR} for the full reference with descriptions${R}\n\n"
 
     unset -f _bar _pct
