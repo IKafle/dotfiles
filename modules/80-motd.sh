@@ -5,6 +5,76 @@
 [[ -n "${_BX_MOD_motd_LOADED:-}" ]] && return 0
 _BX_MOD_motd_LOADED=1
 
+# Renders the todo panel from `today --data` rows on stdin (ADR-0003): the app
+# owns data extraction, this owns presentation. Never parses todo.md.
+__motd_todo_panel() {
+    local R=$'\e[0m' B=$'\e[1m' CY=$'\e[1;36m' GN=$'\e[32m' GR=$'\e[90m'
+
+    # Dim +project / @context tags so they don't dominate the task text.
+    _dim_tags() {
+        local word out=""
+        for word in $1; do
+            case "$word" in
+                +?*|@?*) out+="${GR}${word}${R} " ;;
+                *)       out+="${word} " ;;
+            esac
+        done
+        printf '%s' "${out% }"
+    }
+
+    local -a texts=() states=()
+    local backlog=0 done_today=0
+    local kind a b
+    while IFS=$'\t' read -r kind a b || [[ -n "$kind" ]]; do
+        case "$kind" in
+            T) states+=("$a"); texts+=("$b") ;;
+            B) backlog="$a" ;;
+            D) done_today="$a" ;;
+        esac
+    done
+
+    local total=${#texts[@]} done_count=0 i
+    for (( i=0; i<total; i++ )); do
+        [[ "${states[i]}" == "1" ]] && done_count=$(( done_count + 1 ))
+    done
+
+    if (( total == 0 )); then
+        printf "  ${GR}no plan yet — run today${R}\n"
+    elif (( done_count == total )); then
+        printf "  ${GN}${B}all done ✓${R}\n"
+    else
+        local pct=$(( done_count * 100 / total ))
+        # Completion bar: same █/░ glyphs as the mem/disk bars, but filled green
+        # at any level — more-done is good here, opposite of resource pressure.
+        local w=10 f e bar=""
+        f=$(( pct * w / 100 )); e=$(( w - f ))
+        bar="${GN}"
+        for (( i=0; i<f; i++ )); do bar+="█"; done
+        bar+="${GR}"
+        for (( i=0; i<e; i++ )); do bar+="░"; done
+        bar+="${R}"
+        printf "  ${GR}today${R}   %s  ${B}%d${R}${GR}/${R}${B}%d${R}\n" "$bar" "$done_count" "$total"
+
+        local n=0 shown=0 cap=10
+        for (( i=0; i<total; i++ )); do
+            (( shown >= cap )) && break
+            if [[ "${states[i]}" == "1" ]]; then
+                printf "  ${GR}✓  %s${R}\n" "${texts[i]}"
+            else
+                n=$(( n + 1 ))
+                printf "  ${CY}${B}%d${R}  %s\n" "$n" "$(_dim_tags "${texts[i]}")"
+            fi
+            shown=$(( shown + 1 ))
+        done
+        (( total > shown )) && printf "  ${GR}+%d more — run today${R}\n" "$(( total - shown ))"
+    fi
+
+    printf "  ${GR}backlog ${R}${B}%d${R}${GR} · done today ${R}${B}%d${R}\n" \
+        "$backlog" "$done_today"
+
+    unset -f _dim_tags
+}
+
 __motd_full() {
     local R=$'\e[0m'
     local B=$'\e[1m'
@@ -133,6 +203,15 @@ __motd_full() {
                 fi
             done <<< "$top_out"
         fi
+    fi
+
+    # ── Todo panel ────────────────────────────────────────────
+    # Presentation only; data comes from `today --data` (ADR-0003). Skipped
+    # silently when the todo app isn't loaded.
+    if declare -F today >/dev/null 2>&1; then
+        printf '\n'
+        printf "  %s\n" "$SEP"
+        today --data 2>/dev/null | __motd_todo_panel
     fi
 
     # ── Shortcuts ─────────────────────────────────────────────

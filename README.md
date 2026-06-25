@@ -78,6 +78,15 @@ Every new automation belongs here. That's the rule.
 - `~/.bin/init.sh` never ran → red `⚠ bx: not loaded`.
 - `bx doctor` prints the full diagnosis.
 
+## Todo panel
+
+New terminals (and `bx reload`) render a todo panel in the MOTD: a numbered
+priority list of today's tasks (completed ones collapse to a dimmed `✓`), a
+completion bar, and a `backlog N · done today N` footer. The panel is pure
+presentation — it consumes `today --data` from the `~/todo` app (ADR-0003) and
+never parses `todo.md`. With no plan it shows `no plan yet — run today`; all
+done shows `all done ✓`. Skipped silently when the todo app isn't enabled.
+
 ## Tools (one-shot installers)
 
 | tool                       | purpose                                  |
