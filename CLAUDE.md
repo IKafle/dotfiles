@@ -31,7 +31,7 @@
 ├── enabled-plugins/    symlinks → plugins/
 ├── completions/        bash completions (auto-sourced)
 ├── claude/             config consumed by Claude Code
-└── docs/               notes & references
+└── docs/               notes, references & adr/ (architecture decision records)
 ```
 
 **Three categories**
@@ -41,7 +41,7 @@
   - **file**: `plugins/<name>.<kind>.sh`
   - **directory**: `plugins/<name>/<name>.<kind>.sh` + siblings (`lib.sh`, `postenable.sh`). Entrypoint filename MUST match directory name. `enabled-plugins/<name>` symlinks to the entrypoint, not the directory.
 
-`init.sh` sources `enabled/*.sh` in lexical order. No config file — filesystem is truth.
+`init.sh` sources `enabled/*.sh` in lexical order. No config file — filesystem is truth (rationale: `docs/adr/0001-filesystem-is-truth.md`). Record load-bearing, hard-to-reverse decisions as new ADRs in `docs/adr/` (sequential `NNNN-slug.md`).
 
 **Init guard is PID-scoped.** `init.sh` uses `_BX_INIT_PID=$BASHPID` (*not* exported) — exported guards leak into child shells and break new terminals. If you add another guard, tie it to `$BASHPID` and leave it unexported.
 
