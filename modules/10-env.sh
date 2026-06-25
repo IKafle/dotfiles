@@ -41,9 +41,10 @@ export NODE_OPTIONS="--max-old-space-size=5120"
 # export PYTHONPATH="$HOME/vault/code/python/lis/srp/solid"
 
 # ── Default editor (picks first available) ───────────────────
-if   command -v code &>/dev/null; then export EDITOR="code --wait"; export VISUAL="code --wait"
-elif command -v vim  &>/dev/null; then export EDITOR=vim;            export VISUAL=vim
-elif command -v nano &>/dev/null; then export EDITOR=nano;           export VISUAL=nano
+if   command -v emacs &>/dev/null; then export EDITOR=emacs;          export VISUAL=emacs
+elif command -v code  &>/dev/null; then export EDITOR="code --wait";  export VISUAL="code --wait"
+elif command -v vim   &>/dev/null; then export EDITOR=vim;            export VISUAL=vim
+elif command -v nano  &>/dev/null; then export EDITOR=nano;           export VISUAL=nano
 fi
 
 # Cleanup helper — don't leak into shell environment
