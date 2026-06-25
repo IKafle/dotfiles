@@ -1,0 +1,87 @@
+# Progress — MOTD todo panel (issues/)
+
+## 0001 — `today --data` emit command  ✅ DONE (commit ~/todo e6beea0)
+
+Implemented the ADR-0003 data contract: `today --data` emits a tab-delimited,
+line-based dump the MOTD panel consumes, with zero styling.
+
+Format:
+  T<TAB><0|1><TAB><text>   one row per ## Today task, file order
+                           (0 unchecked / 1 checked; text verbatim incl. tags)
+  B<TAB><n>                count of unchecked ## Backlog tasks
+  D<TAB><n>                count of tasks under today's date header in done.md
+
+- Added `_todo_emit_data` helper + `--data` branch in `today()` (~/todo/todo.sh).
+- Empty Today / empty backlog / no-done-today all emit zero values, no stderr.
+- TDD: tests/test_data.sh (3 tests) — order+state, counts, empty state.
+- Full todo suite green (34 tests across 8 files); `bx selftest` passes.
+- Existing today/--show/td/tdone/tpush untouched.
+
+## 0002 — MOTD todo panel (stacked layout)  ✅ DONE (commit 1cfdd99)
+
+Added `__motd_todo_panel` to modules/80-motd.sh — presentation only, consumes
+`today --data` (ADR-0003), never parses todo.md. Wired into `__motd_full`
+(so it shows on new terminals AND `bx reload`, which calls full), full-width
+below the system panel, skipped silently when the todo app isn't loaded.
+
+Renders:
+  - `## Today` as a numbered priority list (1 2 3 … = order-is-priority).
+  - Completed tasks collapse to a dimmed `✓` (not numbered).
+  - `+project` / `@context` tags dimmed so they don't dominate.
+  - Green completion bar reusing the mem/disk █/░ glyphs (filled green at any
+    level — more-done is good, opposite of resource-pressure bars) + `done/total`.
+  - Footer `backlog N · done today N`.
+  - Cap at 10 rows → dimmed `+N more — run today` overflow line.
+  - Empty Today → `no plan yet — run today`; all done → `all done ✓` + footer.
+
+- TDD: new tests/ harness (lib.sh mirrors ~/todo/tests) + tests/test_motd_todo.sh
+  (7 tests) — numbered list, ✓ collapse + numbering skip, bar+footer, tag dimming,
+  10-cap overflow, empty + all-done states. Widest line 45 cols (clean at 80).
+- Fixed a `while read` final-line-without-newline drop so the panel is robust
+  to data lacking a trailing newline.
+- `bx selftest` passes (11 modules, no failures). README updated.
+
+## 0003 — Two-column equal-halves layout  ✅ DONE (commit 942f274)
+
+Made the MOTD layout responsive, chosen per render from the live terminal
+width. At ≥135 cols the (untouched) system panel fills the left half and the
+todo panel renders in the right half, split by a `│` divider at COLUMNS/2.
+Below the threshold it falls back to the exact stacked layout from 0002.
+
+- `__motd_compose` (modules/80-motd.sh): ANSI-aware compositor. Pads each left
+  line to the midpoint (visible width via `__motd_vislen`, extglob saved/
+  restored) so the divider aligns down the full panel height; left panel
+  emitted verbatim, never reflowed. Right runs out before left.
+- `__motd_system_panel`: the prior `__motd_full` body extracted intact; an
+  optional pre-rendered todo arg keeps the 0002 mid-placement for the stacked
+  branch. New `__motd_full` reads width (`__motd_cols`, COLUMNS→tput→80) and
+  picks compose-vs-stack against `__MOTD_TWO_COL_MIN=135` (2 × ~67-col widest
+  left line, so the system panel never wraps).
+- TDD: tests/test_motd_layout.sh (5 tests) — divider placement, ANSI-aware
+  alignment across ragged/colored lines, left-taller-than-right, wide
+  side-by-side, narrow stacked fallback. 0002 panel tests (7) still green.
+- `bx selftest` passes (11 modules). README "Todo panel" section updated to
+  describe the responsive layout.
+
+## 0004 — Retire _todo_daily_show via opt-out  ✅ DONE (commits ~/todo dbf9f6a, ~/.bin f9ffc7d)
+
+The MOTD panel (0002) renders Today on every terminal, so the todo app's own
+first-of-day print (prefix 32, fires before motd at 80) showed a duplicate
+Today block above the panel. Suppressed it without removing the capability
+(ADR 0003).
+
+- Added a `TODO_SUPPRESS_DAILY_SHOW` opt-out guard at the top of
+  `_todo_daily_show` (~/todo/todo.sh): when set, returns silently AND leaves
+  the `.last_shown` marker untouched, so a plain (non-bx) shell later the same
+  day still treats itself as first-of-day. App keeps owning the behavior.
+- `modules/32-todo.sh` exports `TODO_SUPPRESS_DAILY_SHOW=1` *before* sourcing
+  todo.sh (the hook fires at load time for interactive shells), so the panel is
+  the single home of the Today display.
+- TDD: new tests/test_hook.sh test — suppressed path prints nothing, rc 0, and
+  no marker written. Existing 4 hook tests (unsuppressed path) still green.
+- Full todo suite green (35 tests across 8 files); `bx selftest` passes
+  (11 modules). ADR 0003 already documented this variable; no README change
+  (removes a duplicate, not a new capability).
+
+## Next up
+- All issues (0001–0004) done.
