@@ -173,6 +173,10 @@ __motd_compose() {
         # alignment and space rather than a drawn line.
         printf '%s%*s   %s\n' "$ll" "$pad" "" "$rl"
     done
+    # Trailing blank to match the leading one — the system panel ends with one,
+    # but $(…) capture above strips it, so re-add it here for symmetry with the
+    # top and breathing room before the prompt (stacked mode keeps its own).
+    printf '\n'
 }
 
 # The system panel — the existing greeting, rendered verbatim and never
