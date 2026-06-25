@@ -87,6 +87,12 @@ presentation — it consumes `today --data` from the `~/todo` app (ADR-0003) and
 never parses `todo.md`. With no plan it shows `no plan yet — run today`; all
 done shows `all done ✓`. Skipped silently when the todo app isn't enabled.
 
+The layout is responsive, chosen per render from the live terminal width: at
+≥135 columns the panel sits **beside** the system panel as equal halves split
+by a `│` divider at the midpoint; below that it falls back to stacking
+full-width underneath. Resize, then open a new terminal (or `bx reload`) to
+switch layouts.
+
 ## Tools (one-shot installers)
 
 | tool                       | purpose                                  |

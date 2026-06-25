@@ -75,7 +75,48 @@ __motd_todo_panel() {
     unset -f _dim_tags
 }
 
-__motd_full() {
+# Visible width of a string, ignoring ANSI SGR escapes (pure bash, no fork).
+__motd_vislen() {
+    local s=$1 stripped
+    local had_extglob=1; shopt -q extglob || had_extglob=0
+    shopt -s extglob
+    stripped="${s//$'\e'\[*([0-9;])m/}"
+    (( had_extglob )) || shopt -u extglob
+    printf '%s' "${#stripped}"
+}
+
+# Compose two text blocks side-by-side: LEFT in a half-width left column, a `│`
+# divider at COLUMNS/2, RIGHT in the right half. Left lines are padded (ANSI
+# aware) so the divider aligns; the left panel is emitted verbatim, never
+# reflowed. Right runs out before left when it has fewer lines.
+__motd_compose() {
+    local left=$1 right=$2 cols=$3
+    local R=$'\e[0m' GR=$'\e[90m'
+    local half=$(( cols / 2 ))
+
+    local -a llines=() rlines=()
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do llines+=("$line"); done <<< "$left"
+    while IFS= read -r line || [[ -n "$line" ]]; do rlines+=("$line"); done <<< "$right"
+
+    local n=${#llines[@]} i ll rl pad vis
+    (( ${#rlines[@]} > n )) && n=${#rlines[@]}
+    for (( i=0; i<n; i++ )); do
+        ll="${llines[i]:-}"
+        rl="${rlines[i]:-}"
+        vis=$(__motd_vislen "$ll")
+        pad=$(( half - vis ))
+        (( pad < 0 )) && pad=0
+        printf '%s%*s%s│ %s\n' "$ll" "$pad" "" "$GR" "${R}${rl}"
+    done
+}
+
+# The system panel — the existing greeting, rendered verbatim and never
+# reflowed. Optional $1 is pre-rendered todo-panel text: when given it is
+# stacked full-width below the system-info block (the issue-0002 layout); in
+# two-column mode it is omitted here and composed beside this block instead.
+__motd_system_panel() {
+    local todo_block=${1:-}
     local R=$'\e[0m'
     local B=$'\e[1m'
     local CY=$'\e[1;36m'   # bold cyan   — header / cheatsheet labels
@@ -205,13 +246,13 @@ __motd_full() {
         fi
     fi
 
-    # ── Todo panel ────────────────────────────────────────────
-    # Presentation only; data comes from `today --data` (ADR-0003). Skipped
-    # silently when the todo app isn't loaded.
-    if declare -F today >/dev/null 2>&1; then
+    # ── Todo panel (stacked) ──────────────────────────────────
+    # Only when pre-rendered todo text was passed in (stacked layout). In
+    # two-column mode the orchestrator composes it beside this block instead.
+    if [[ -n "$todo_block" ]]; then
         printf '\n'
         printf "  %s\n" "$SEP"
-        today --data 2>/dev/null | __motd_todo_panel
+        printf '%s\n' "$todo_block"
     fi
 
     # ── Shortcuts ─────────────────────────────────────────────
@@ -229,6 +270,38 @@ __motd_full() {
     printf "  ${GR}type ${R}${B}shortcuts${R}${GR} for the full reference with descriptions${R}\n\n"
 
     unset -f _bar _pct
+}
+
+# Live terminal width, falling back when COLUMNS is unset (non-login shells).
+__motd_cols() {
+    if [[ -n "${COLUMNS:-}" ]]; then
+        printf '%s' "$COLUMNS"
+    else
+        tput cols 2>/dev/null || printf '80'
+    fi
+}
+
+# Below this width the equal halves would force the ~67-col system panel to
+# wrap, so we fall back to the stacked layout. 2 × widest left line ≈ 135.
+__MOTD_TWO_COL_MIN=135
+
+# Orchestrates layout per render from the live terminal width: side-by-side
+# when there is room, otherwise the stacked layout from issue 0002.
+__motd_full() {
+    local todo="" cols
+    cols=$(__motd_cols)
+
+    # Presentation only; data comes from `today --data` (ADR-0003). Skipped
+    # silently when the todo app isn't loaded.
+    if declare -F today >/dev/null 2>&1; then
+        todo="$(today --data 2>/dev/null | __motd_todo_panel)"
+    fi
+
+    if [[ -n "$todo" ]] && (( cols >= __MOTD_TWO_COL_MIN )); then
+        __motd_compose "$(__motd_system_panel)" "$todo" "$cols"
+    else
+        __motd_system_panel "$todo"
+    fi
 }
 
 __motd_reload() {
