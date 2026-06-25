@@ -138,7 +138,9 @@ alias con='_dotedit ~/.bin/modules/70-holidays.sh'
 alias pr='_dotedit ~/.bin/modules/60-prompt.sh'
 
 # ── Shell ─────────────────────────────────────────────────────
-alias reload='source ~/.bashrc && echo "Shell reloaded."'
+# Clear the PID-scoped init guard first, else init.sh short-circuits and the
+# re-source is a no-op in the current shell (see init.sh:21, bx reload).
+alias reload='unset _BX_INIT_PID BX_MOTD_SHOWN && source ~/.bashrc && echo "Shell reloaded."'
 alias battery='upower -i $(upower -e | grep BAT) | grep -E "state|to full|to empty|percentage"'
 alias settings='gnome-control-center'
 
