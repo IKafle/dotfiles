@@ -1,11 +1,13 @@
 # motd — terminal greeting
-#   new terminal  →  evenly-spread multi-column dashboard
+#   new terminal  →  framed multi-column dashboard
 #   reload        →  single confirmation line + redraw
 #
-# Layout: three content blocks (vitals · today · shortcuts) composed into
-# columns that are spread evenly across the live terminal width — equal left
-# margin, gutters and right margin, recomputed each render. Falls back to two
-# columns, then a stacked layout, when the width can't hold the wider form.
+# Layout: a master header crowned by a dim hairline rule, then three peer-headed
+# content blocks (system · today · shortcuts) laid out as a grid — bound by dim
+# vertical dividers that join the top/bottom rules with ┬/┴ junctions, so the
+# columns read as one cohesive dashboard instead of three floating blocks. Every
+# block starts at the left and gutters are equal. Falls back to two columns,
+# then a stacked layout, when the width can't hold the wider form.
 
 [[ -n "${_BX_MOD_motd_LOADED:-}" ]] && return 0
 _BX_MOD_motd_LOADED=1
@@ -91,6 +93,8 @@ __motd_vitals() {
         printf "${col}${B}%3d%%${R}" "$p"
     }
 
+    printf "  ${CY}${B}◆ system${R}\n"
+    printf '\n'
     printf "  ${GR}os${R}      %s\n" "$os"
     printf "  ${GR}kernel${R}  %s\n" "$kernel"
     printf "  ${GR}uptime${R}  %s\n" "$up"
@@ -164,18 +168,14 @@ __motd_todo_panel() {
     done
     local pend_n=${#pending[@]}
 
-    # Header: ◆ today + a stateful badge right-aligned to the card width.
-    local PW=40 badge_raw="" badge_fmt=""
+    # Header: ◆ today + a stateful badge inlined right after it (the grid's
+    # vertical divider gives the column its right edge, so no fragile padding).
+    local badge=""
     if   (( total == 0 ));  then :
-    elif (( pend_n == 0 )); then badge_raw="all done ✓"; badge_fmt="${GN}${B}all done ✓${R}"
-    else                         badge_raw="$pend_n left"; badge_fmt="${GR}$pend_n left${R}"
+    elif (( pend_n == 0 )); then badge=" ${GR}·${R} ${GN}${B}all done ✓${R}"
+    else                         badge=" ${GR}· $pend_n left${R}"
     fi
-    if [[ -n "$badge_raw" ]]; then
-        local hpad=$(( PW - 7 - ${#badge_raw} )); (( hpad < 1 )) && hpad=1
-        printf "  ${CY}${B}◆ today${R}%*s%s\n" "$hpad" "" "$badge_fmt"
-    else
-        printf "  ${CY}${B}◆ today${R}\n"
-    fi
+    printf "  ${CY}${B}◆ today${R}%s\n" "$badge"
 
     if (( total == 0 )); then
         printf '\n'
@@ -196,7 +196,6 @@ __motd_todo_panel() {
             local pcap=5 shown=0
             for (( i=0; i<pend_n; i++ )); do
                 (( shown >= pcap )) && break
-                (( shown > 0 )) && printf '\n'
                 if (( i == 0 )); then
                     printf "  ${CY}${B}▸${R}  ${B}%s${R}\n" "$(_color_tags "${pending[i]}")"
                 else
@@ -205,7 +204,7 @@ __motd_todo_panel() {
                 shown=$(( shown + 1 ))
             done
             (( pend_n > shown )) && \
-                printf "\n  ${GR}   +%d more — run ${R}${B}today${R}\n" "$(( pend_n - shown ))"
+                printf "  ${GR}   +%d more — run ${R}${B}today${R}\n" "$(( pend_n - shown ))"
         fi
 
         if (( done_count > 0 )); then
@@ -232,6 +231,8 @@ __motd_todo_panel() {
 # so it earns its own column rather than crowding the live status.
 __motd_shortcuts() {
     local R=$'\e[0m' B=$'\e[1m' CY=$'\e[1;36m' GR=$'\e[90m'
+    printf "  ${CY}${B}◆ shortcuts${R}\n"
+    printf '\n'
     printf "  ${CY}nav   ${R}..  ...  ....  -    dev  vault  inbox\n"
     printf "  ${CY}git   ${R}gst  gss  gaa  gcmsg  gp  gl  gco  gcb  gsync  gparent  nah\n"
     printf '\n'
@@ -244,21 +245,39 @@ __motd_shortcuts() {
     printf "  ${CY}edit  ${R}en  al  fun  con  pr  reload\n"
     printf "  ${CY}dock  ${R}dps  dpsa  dcu  dcd  dlogs  docker_clean\n"
     printf "  ${CY}bx    ${R}bx ls  bx enable  bx disable  bx reload  bx doctor  bx help\n"
-    printf '\n'
-    printf "  ${GR}type ${R}${B}shortcuts${R}${GR} for the full reference${R}\n"
 }
 
-# Compose blocks into a cohesive, left-anchored column group. Every block
-# starts at the left edge so the text reads naturally left-to-right; columns
-# are separated by a fixed, equal gutter (not a width-scaled one) so the
-# spacing between them is uniform and they stay grouped as one dashboard at any
-# width. Leftover width pools on the right, like any CLI output. The master
-# header's date is right-aligned to the block's own right edge.
+# Draw a dim hairline rule spanning the dashboard, with junction glyphs ($jch,
+# e.g. ┬ or ┴) punched in where the vertical column dividers meet it. The rule
+# is printed with a 2-space indent so it lines up with the column content; the
+# divider offsets are given in composed-row ("out") coordinates.
+#   $1 width  $2 dim-seq  $3 reset-seq  $4 junction-char  $5 name of offsets array
+__motd_rule_line() {
+    local w=$1 GR=$2 R=$3 jch=$4
+    local -n _offs="$5"
+    local body; printf -v body '%*s' "$(( w - 2 ))" ''
+    body="${body// /─}"
+    local off idx
+    for off in "${_offs[@]}"; do
+        idx=$(( off - 2 ))
+        (( idx < 0 || idx >= ${#body} )) && continue
+        body="${body:0:idx}${jch}${body:idx+1}"
+    done
+    printf '  %s%s%s\n' "$GR" "$body" "$R"
+}
+
+# Compose blocks into one cohesive, left-anchored dashboard grid. Every block
+# starts at the left so text reads naturally; columns are separated by equal
+# gutters carrying a dim vertical divider, and the whole grid is bracketed by
+# hairline rules whose ┬/┴ junctions land exactly on the dividers — so three
+# blocks read as one framed dashboard. The master header's date is right-aligned
+# to the grid's right edge.
 #   $1 cols  $2 header-left (fmt)  $3 header-date (fmt)  $4.. column blocks
 __motd_layout() {
     local cols=$1 hfmt=$2 hdate=$3; shift 3
     local -a blocks=("$@")
     local n=${#blocks[@]}
+    local R=$'\e[0m' B=$'\e[1m' CY=$'\e[1;36m' GR=$'\e[90m'
 
     local -A L
     local -a colw=()
@@ -275,26 +294,32 @@ __motd_layout() {
         (( r > maxrows )) && maxrows=$r
     done
 
-    local GUTTER=$__MOTD_GUTTER
-    local gut; printf -v gut '%*s' "$GUTTER" ''
+    # Gutter: GUTL spaces · divider · GUTR spaces (keep GUTL+1+GUTR in sync with
+    # __MOTD_GUTTER, used by the fit checks). Record each divider's column offset
+    # (in composed-row coordinates) and the total grid width as we go.
+    local GUTL=2 GUTR=2
+    local gutsep; printf -v gutsep '%*s%s│%s%*s' "$GUTL" '' "$GR" "$R" "$GUTR" ''
+    local -a divoff=()
+    local acc=0
+    for (( i=0; i<n; i++ )); do
+        acc=$(( acc + colw[i] ))
+        if (( i < n - 1 )); then
+            divoff[i]=$(( acc + GUTL ))
+            acc=$(( acc + GUTL + 1 + GUTR ))
+        fi
+    done
+    local blockw=$acc
 
-    # Block width = column widths + the gutters between them.
-    local blockw=0
-    for (( i=0; i<n; i++ )); do blockw=$(( blockw + colw[i] )); done
-    blockw=$(( blockw + GUTTER * (n - 1) ))
-
-    # Left-anchored: no centering margin. The columns already carry a 2-space
-    # indent, which serves as the left margin so the block lines up naturally.
-
-    # Header: identity at the block's left edge (offset by the columns' 2-space
-    # indent), date right-aligned to the block's right edge.
+    # Master header + top rule.
     local hvis dvis hpad
     hvis=$(__motd_vislen "$hfmt"); dvis=$(__motd_vislen "$hdate")
     hpad=$(( blockw - 2 - hvis - dvis )); (( hpad < 2 )) && hpad=2
     printf '\n'
     printf '  %s%*s%s\n' "$hfmt" "$hpad" '' "$hdate"
+    __motd_rule_line "$blockw" "$GR" "$R" '┬' divoff
     printf '\n'
 
+    # Grid rows: each column padded to its width, dividers between.
     local c out pad
     for (( r=0; r<maxrows; r++ )); do
         out=""
@@ -302,14 +327,16 @@ __motd_layout() {
             line="${L[$c,$r]:-}"
             vis=$(__motd_vislen "$line")
             pad=$(( colw[c] - vis )); (( pad < 0 )) && pad=0
-            if (( c < n - 1 )); then
-                printf -v out '%s%s%*s%s' "$out" "$line" "$pad" '' "$gut"
-            else
-                out+="$line"
-            fi
+            printf -v out '%s%s%*s' "$out" "$line" "$pad" ''
+            (( c < n - 1 )) && out+="$gutsep"
         done
         printf '%s\n' "$out"
     done
+
+    # Bottom rule + footer hint.
+    printf '\n'
+    __motd_rule_line "$blockw" "$GR" "$R" '┴' divoff
+    printf "  ${GR}type ${R}${B}shortcuts${R}${GR} for the full reference${R}\n"
     printf '\n'
 }
 
@@ -344,10 +371,10 @@ __motd_cols() {
     fi
 }
 
-# Fixed gutter between columns — comfortable but tight, so the columns stay
-# grouped as one dashboard at any width. The composed block is centered in the
-# terminal, with equal margins either side.
-__MOTD_GUTTER=6
+# Total visible width of the inter-column gutter (GUTL + divider + GUTR in
+# __motd_layout). Used by the fit checks below to pick a column tier. Keep in
+# sync with GUTL/GUTR in __motd_layout.
+__MOTD_GUTTER=5
 
 # Orchestrate the layout per render from the live width: three even columns
 # when they fit, then vitals+shortcuts | today as two, then stacked.
@@ -380,10 +407,13 @@ __motd_full() {
             __motd_layout "$cols" "$hfmt" "$hdate" "$vitals" "$todo" "$shorts"
             return
         fi
-        local leftblock; printf -v leftblock '%s\n\n%s' "$vitals" "$shorts"
+        # Two columns: live state (system + today) on the left, reference
+        # (shortcuts) on the right — keeps the two halves close in height so the
+        # divider isn't a tall empty channel.
+        local leftblock; printf -v leftblock '%s\n\n%s' "$vitals" "$todo"
         wL=$(__motd_blockwidth "$leftblock")
-        if (( cols >= wL + w2 + gut + 4 )); then
-            __motd_layout "$cols" "$hfmt" "$hdate" "$leftblock" "$todo"
+        if (( cols >= wL + w3 + gut + 4 )); then
+            __motd_layout "$cols" "$hfmt" "$hdate" "$leftblock" "$shorts"
             return
         fi
         __motd_stacked "$cols" "$hfmt" "$hdate" "$vitals" "$todo" "$shorts"

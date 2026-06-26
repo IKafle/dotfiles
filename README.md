@@ -80,23 +80,25 @@ Every new automation belongs here. That's the rule.
 
 ## MOTD dashboard
 
-New terminals (and `bx reload`) render a dashboard MOTD: a master header
-(user@host + date), then three content columns — **vitals** (os/kernel/load,
-mem/disk bars, ip, bx status, top commands), **today** (the todo card), and
-**shortcuts** (the cheatsheet). The today card consumes `today --data` from the
-`~/todo` app (ADR-0003) and is pure presentation — it never parses `todo.md`. It
-shows a completion bar, the focus task marked `▸`, dimmed `✓` for done, and a
-`backlog N · done today N` footer; with no plan it reads `no plan yet — run
-today`, and `all done ✓` when the list is clear. The today column is skipped
-silently when the todo app isn't enabled.
+New terminals (and `bx reload`) render a framed dashboard MOTD: a master header
+(user@host + date) crowned by a dim hairline rule, then three peer-headed
+columns — **◆ system** (os/kernel/load, mem/disk bars, ip, bx status, top
+commands), **◆ today** (the todo card), and **◆ shortcuts** (the cheatsheet) —
+bound by dim vertical dividers that join the top and bottom rules with `┬`/`┴`
+junctions, so the three blocks read as one grid. The today card consumes `today
+--data` from the `~/todo` app (ADR-0003) and is pure presentation — it never
+parses `todo.md`. It shows a completion bar, the focus task marked `▸`, dimmed
+`✓` for done, and a `backlog N · done today N` footer; with no plan it reads `no
+plan yet — run today`, and `all done ✓` when the list is clear. The today column
+is skipped silently when the todo app isn't enabled.
 
 The layout is responsive, recomputed per render from the live terminal width.
 The columns are **left-anchored** (every block starts at the left so text reads
-naturally) and separated by a fixed, **equal gutter**, so they stay grouped as
-one dashboard with uniform spacing. When the width can't hold three columns it
-falls back to two (vitals+shortcuts | today), then to a full-width stacked
-layout on narrow terminals. Resize, then open a new terminal (or `bx reload`) to
-switch tiers.
+naturally) and separated by **equal gutters** carrying the dividers, so they
+stay grouped as one dashboard. When the width can't hold three columns it falls
+back to two (**system + today** live state | **shortcuts** reference), then to a
+full-width stacked layout on narrow terminals. Resize, then open a new terminal
+(or `bx reload`) to switch tiers.
 
 ## Tools (one-shot installers)
 
