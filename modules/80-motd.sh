@@ -142,12 +142,6 @@ __motd_todo_panel() {
         done
         printf '%s' "${out% }"
     }
-    # Cap task text to a column-friendly width so a long task can't blow the
-    # column out or collide with the next one. Truncates on visible chars.
-    _trunc() {
-        local s=$1 m=$2
-        if (( ${#s} > m )); then printf '%s…' "${s:0:m-1}"; else printf '%s' "$s"; fi
-    }
 
     local -a texts=() states=()
     local backlog=0 done_today=0 kind a b
@@ -204,9 +198,9 @@ __motd_todo_panel() {
                 (( shown >= pcap )) && break
                 (( shown > 0 )) && printf '\n'
                 if (( i == 0 )); then
-                    printf "  ${CY}${B}▸${R}  ${B}%s${R}\n" "$(_color_tags "$(_trunc "${pending[i]}" 40)")"
+                    printf "  ${CY}${B}▸${R}  ${B}%s${R}\n" "$(_color_tags "${pending[i]}")"
                 else
-                    printf "  ${GR}·${R}  %s\n" "$(_color_tags "$(_trunc "${pending[i]}" 40)")"
+                    printf "  ${GR}·${R}  %s\n" "$(_color_tags "${pending[i]}")"
                 fi
                 shown=$(( shown + 1 ))
             done
@@ -219,7 +213,7 @@ __motd_todo_panel() {
             local dcap=3 dshown=0
             for (( i=0; i<done_count; i++ )); do
                 (( dshown >= dcap )) && break
-                printf "  ${GN}✓${R}  ${GR}%s${R}\n" "$(_trunc "${finished[i]}" 40)"
+                printf "  ${GN}✓${R}  ${GR}%s${R}\n" "${finished[i]}"
                 dshown=$(( dshown + 1 ))
             done
             (( done_count > dshown )) && \
@@ -230,7 +224,7 @@ __motd_todo_panel() {
     printf '\n'
     printf "  ${GR}backlog${R} ${B}%d${R}    ${GR}done today${R} ${B}%d${R}\n" "$backlog" "$done_today"
 
-    unset -f _color_tags _trunc
+    unset -f _color_tags
 }
 
 # ── Column 3 · shortcuts ───────────────────────────────────────
@@ -254,11 +248,12 @@ __motd_shortcuts() {
     printf "  ${GR}type ${R}${B}shortcuts${R}${GR} for the full reference${R}\n"
 }
 
-# Compose blocks into evenly-spread columns. The leftover width (after the
-# columns' natural widths) is split into N+1 equal gaps — left margin, the
-# gutters, and the right margin all match — so the dashboard distributes
-# across the whole screen. A full-width master header crowns the columns,
-# its date right-aligned to the same right edge.
+# Compose blocks into a cohesive, left-anchored column group. Every block
+# starts at the left edge so the text reads naturally left-to-right; columns
+# are separated by a fixed, equal gutter (not a width-scaled one) so the
+# spacing between them is uniform and they stay grouped as one dashboard at any
+# width. Leftover width pools on the right, like any CLI output. The master
+# header's date is right-aligned to the block's own right edge.
 #   $1 cols  $2 header-left (fmt)  $3 header-date (fmt)  $4.. column blocks
 __motd_layout() {
     local cols=$1 hfmt=$2 hdate=$3; shift 3
@@ -280,30 +275,35 @@ __motd_layout() {
         (( r > maxrows )) && maxrows=$r
     done
 
-    local sumw=0
-    for (( i=0; i<n; i++ )); do sumw=$(( sumw + colw[i] )); done
-    local G=$(( (cols - sumw) / (n + 1) ))
-    (( G < 2 )) && G=2
-    local gap; printf -v gap '%*s' "$G" ''
+    local GUTTER=$__MOTD_GUTTER
+    local gut; printf -v gut '%*s' "$GUTTER" ''
 
-    # Header spans the framed width [G .. cols-G]; date hugs the right edge.
-    local hvis dvis frame hpad
+    # Block width = column widths + the gutters between them.
+    local blockw=0
+    for (( i=0; i<n; i++ )); do blockw=$(( blockw + colw[i] )); done
+    blockw=$(( blockw + GUTTER * (n - 1) ))
+
+    # Left-anchored: no centering margin. The columns already carry a 2-space
+    # indent, which serves as the left margin so the block lines up naturally.
+
+    # Header: identity at the block's left edge (offset by the columns' 2-space
+    # indent), date right-aligned to the block's right edge.
+    local hvis dvis hpad
     hvis=$(__motd_vislen "$hfmt"); dvis=$(__motd_vislen "$hdate")
-    frame=$(( cols - 2 * G ))
-    hpad=$(( frame - hvis - dvis )); (( hpad < 2 )) && hpad=2
+    hpad=$(( blockw - 2 - hvis - dvis )); (( hpad < 2 )) && hpad=2
     printf '\n'
-    printf '%s%s%*s%s\n' "$gap" "$hfmt" "$hpad" '' "$hdate"
+    printf '  %s%*s%s\n' "$hfmt" "$hpad" '' "$hdate"
     printf '\n'
 
     local c out pad
     for (( r=0; r<maxrows; r++ )); do
-        out="$gap"
+        out=""
         for (( c=0; c<n; c++ )); do
             line="${L[$c,$r]:-}"
             vis=$(__motd_vislen "$line")
             pad=$(( colw[c] - vis )); (( pad < 0 )) && pad=0
             if (( c < n - 1 )); then
-                printf -v out '%s%s%*s%s' "$out" "$line" "$pad" '' "$gap"
+                printf -v out '%s%s%*s%s' "$out" "$line" "$pad" '' "$gut"
             else
                 out+="$line"
             fi
@@ -344,9 +344,10 @@ __motd_cols() {
     fi
 }
 
-# Minimum gutter/margin width below which a column form is too cramped and we
-# drop to the next-simpler layout.
-__MOTD_MIN_GAP=3
+# Fixed gutter between columns — comfortable but tight, so the columns stay
+# grouped as one dashboard at any width. The composed block is centered in the
+# terminal, with equal margins either side.
+__MOTD_GUTTER=6
 
 # Orchestrate the layout per render from the live width: three even columns
 # when they fit, then vitals+shortcuts | today as two, then stacked.
@@ -367,19 +368,21 @@ __motd_full() {
         todo="$(today --data 2>/dev/null | __motd_todo_panel)"
     fi
 
-    local w1 w2 w3 wL g=$__MOTD_MIN_GAP
+    # A column form is used only when the cohesive block (columns + fixed
+    # gutters) fits with a little room to centre it.
+    local w1 w2 w3 wL gut=$__MOTD_GUTTER
     w1=$(__motd_blockwidth "$vitals")
     w3=$(__motd_blockwidth "$shorts")
 
     if [[ -n "$todo" ]]; then
         w2=$(__motd_blockwidth "$todo")
-        if (( cols - (w1 + w2 + w3) >= 4 * g )); then
+        if (( cols >= w1 + w2 + w3 + 2 * gut + 4 )); then
             __motd_layout "$cols" "$hfmt" "$hdate" "$vitals" "$todo" "$shorts"
             return
         fi
         local leftblock; printf -v leftblock '%s\n\n%s' "$vitals" "$shorts"
         wL=$(__motd_blockwidth "$leftblock")
-        if (( cols - (wL + w2) >= 3 * g )); then
+        if (( cols >= wL + w2 + gut + 4 )); then
             __motd_layout "$cols" "$hfmt" "$hdate" "$leftblock" "$todo"
             return
         fi
@@ -387,7 +390,7 @@ __motd_full() {
         return
     fi
 
-    if (( cols - (w1 + w3) >= 3 * g )); then
+    if (( cols >= w1 + w3 + gut + 4 )); then
         __motd_layout "$cols" "$hfmt" "$hdate" "$vitals" "$shorts"
     else
         __motd_stacked "$cols" "$hfmt" "$hdate" "$vitals" "$shorts"

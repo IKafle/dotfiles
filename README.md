@@ -91,11 +91,12 @@ today`, and `all done ✓` when the list is clear. The today column is skipped
 silently when the todo app isn't enabled.
 
 The layout is responsive, recomputed per render from the live terminal width.
-The columns are **spread evenly** across the whole screen — equal left margin,
-gutters and right margin — rather than hugging one edge. When the width can't
-hold three columns it falls back to two (vitals+shortcuts | today), then to a
-full-width stacked layout on narrow terminals. Resize, then open a new terminal
-(or `bx reload`) to switch tiers.
+The columns are **left-anchored** (every block starts at the left so text reads
+naturally) and separated by a fixed, **equal gutter**, so they stay grouped as
+one dashboard with uniform spacing. When the width can't hold three columns it
+falls back to two (vitals+shortcuts | today), then to a full-width stacked
+layout on narrow terminals. Resize, then open a new terminal (or `bx reload`) to
+switch tiers.
 
 ## Tools (one-shot installers)
 
