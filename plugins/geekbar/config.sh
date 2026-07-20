@@ -97,7 +97,7 @@ ENABLE_NOTIFICATIONS=1
 # Per-widget opt-out. Set to 0 to silence that widget's transitions.
 # Sensible defaults shown; comment out (or set 0) any you find noisy.
 NOTIFY_disk=1
-NOTIFY_cpu=1
+NOTIFY_cpu=0
 NOTIFY_ram=1
 NOTIFY_battery=1
 NOTIFY_vpn=1
