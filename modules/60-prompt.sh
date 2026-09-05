@@ -20,7 +20,11 @@ fi
 # Append __git_ps1 to PROMPT_COMMAND without clobbering hooks that earlier
 # modules (cmdlog, geekbar-track) prepended. PS1 must be set last, so this
 # goes at the END of the chain.
+# Terminal title (user@host: dir) on terminals that understand it.
+_prompt_title=""
+case "$TERM" in xterm*|rxvt*) _prompt_title='\[\e]0;\u@\h: \w\a\]' ;; esac
 if [[ ";${PROMPT_COMMAND:-};" != *__git_ps1* ]]; then
-    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}"'__git_ps1 "\u@\h:\w" "\\\$ "'
+    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}"'__git_ps1 "'"$_prompt_title"'\u@\h:\w" "\\\$ "'
 fi
+unset _prompt_title
 export PROMPT_COMMAND

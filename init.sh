@@ -20,6 +20,15 @@
 # ── Source guard ──────────────────────────────────────────────────
 [[ "${_BX_INIT_PID:-}" == "$BASHPID" ]] && return 0
 
+# ── Interactive guard ─────────────────────────────────────────────
+# ~/.bashrc is one line, so the "do nothing for non-interactive shells" rule
+# lives here: an `ssh host cmd` or scp session must not get the motd or a
+# holiday greeting on its stream. Checks set BX_FORCE_LOAD=1 to load anyway.
+case $- in
+    *i*) ;;
+    *) [[ -n "${BX_FORCE_LOAD:-}" ]] || return 0 ;;
+esac
+
 # ── Shell guard ───────────────────────────────────────────────────
 # We use bash arrays, [[ ]], $BASH_SOURCE. Bail cleanly on non-bash.
 if [ -z "${BASH_VERSION:-}" ]; then

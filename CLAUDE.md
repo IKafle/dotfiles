@@ -9,7 +9,7 @@
 3. Modules MUST start with a load guard: `[[ -n "${_BX_MOD_<NAME>_LOADED:-}" ]] && return 0; _BX_MOD_<NAME>_LOADED=1`.
 4. Tools MUST declare `# bx-purpose: <one-liner>` on line 2.
 5. Enable via `bx enable <name>` — never `ln -s` by hand. `enabled/` is the truth.
-6. Never edit `~/.bashrc` directly. It should only contain `. ~/.bin/init.sh`.
+6. Never edit `~/.bashrc` directly. `bx install` makes it exactly the bx hook (backing up anything else to `~/.bashrc.pre-bx`); stock-bashrc behaviour lives in `modules/15-shell-options.sh` and the interactive guard in `init.sh`.
 7. Don't add features beyond what was asked. No speculative modules.
 8. Run `bx selftest` before committing.
 9. Preserve load order with NN- prefixes (table below). 10-unit gaps let you wedge in.

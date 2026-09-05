@@ -635,7 +635,7 @@ cmd_selftest() {
     # We strip the inherited env so the guard doesn't short-circuit (catching
     # the kind of leak that breaks new terminals spawned from the desktop).
     local out
-    out=$(env -i HOME="$HOME" TERM=dumb PATH="/usr/bin:/bin" bash -c '. "'"$BX_HOME"'"/init.sh && echo "$BX_MODULES_LOADED|${BX_MODULES_FAILED:-}"' 2>&1)
+    out=$(env -i HOME="$HOME" TERM=dumb PATH="/usr/bin:/bin" BX_FORCE_LOAD=1 bash -c '. "'"$BX_HOME"'"/init.sh && echo "$BX_MODULES_LOADED|${BX_MODULES_FAILED:-}"' 2>&1)
     local loaded="${out%%|*}" failed="${out#*|}"
     if [[ "$loaded" =~ ^[0-9]+$ ]] && (( loaded > 0 )) && [[ -z "$failed" ]]; then
         _bx_st_ok "clean-env subshell load: $loaded modules, no failures"
@@ -645,7 +645,7 @@ cmd_selftest() {
 
     # 2. Modules also load when parent env carries BX_VARS — proves the guard
     # is shell-PID-scoped, not environment-variable-scoped.
-    out=$(BX_VERSION=1.0.0 BX_MODULES_LOADED=0 bash -c '. "'"$BX_HOME"'"/init.sh && type -t shortcuts' 2>&1)
+    out=$(BX_VERSION=1.0.0 BX_MODULES_LOADED=0 BX_FORCE_LOAD=1 bash -c '. "'"$BX_HOME"'"/init.sh && type -t shortcuts' 2>&1)
     if [[ "$out" == "function" ]]; then
         _bx_st_ok "modules load even with inherited BX_VERSION"
     else
@@ -653,7 +653,7 @@ cmd_selftest() {
     fi
 
     # 3. Double-source idempotency — PID guard returns 0 on second source.
-    if bash -c '. "'"$BX_HOME"'"/init.sh; . "'"$BX_HOME"'"/init.sh' >/dev/null 2>&1; then
+    if BX_FORCE_LOAD=1 bash -c '. "'"$BX_HOME"'"/init.sh; . "'"$BX_HOME"'"/init.sh' >/dev/null 2>&1; then
         _bx_st_ok "double-source is idempotent"
     else
         _bx_st_fail "double-source errors"
@@ -778,19 +778,28 @@ _bx_bashrc_hooked() {
     grep -Eq "^[[:space:]]*(\.|source)[[:space:]]+[\"']?(\\\$HOME|~|$HOME|$BX_HOME|\\\$BX_HOME)(/\.bin)?/init\.sh" "$HOME/.bashrc" 2>/dev/null
 }
 
+# ~/.bashrc is owned by bx and contains only the hook (CLAUDE.md #6). Anything
+# else there is either already a module (history, completion, ls colours,
+# the interactive guard live in 15-shell-options / init.sh) or belongs in one.
+_bx_bashrc_canonical() {
+    printf '# ~/.bashrc — everything lives in ~/.bin (bx). Do not edit; run `bx edit <module>`.\n. ~/.bin/init.sh\n'
+}
+
 cmd_install() {
-    local line=". $BX_HOME/init.sh"
-    if _bx_bashrc_hooked; then
-        bx_dim "~/.bashrc already sources init.sh — nothing to do"
+    local rc="$HOME/.bashrc"
+    if [[ -f "$rc" ]] && cmp -s "$rc" <(_bx_bashrc_canonical); then
+        bx_dim "~/.bashrc already canonical — nothing to do"
         return 0
     fi
-    {
-        echo ""
-        echo "# bx — central shell-customization system"
-        echo "$line"
-    } >> "$HOME/.bashrc"
-    bx_ok "added source line to ~/.bashrc"
-    bx_dim "open a new terminal or run:  $line"
+    if [[ -s "$rc" ]]; then
+        local bak="$rc.pre-bx"
+        [[ -e "$bak" ]] && bak="$rc.pre-bx.$(date +%Y%m%d%H%M%S)"
+        cp -p "$rc" "$bak"
+        bx_warn "replaced ~/.bashrc — previous copy: ${bak/#$HOME/~}"
+    fi
+    _bx_bashrc_canonical > "$rc"
+    bx_ok "~/.bashrc now contains only the bx hook"
+    bx_dim "open a new terminal or run:  . ~/.bin/init.sh"
 }
 
 # ── Plugin subcommands ──────────────────────────────────────────

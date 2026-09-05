@@ -259,8 +259,9 @@ wire_shell() {
     local out
     if out=$("$TARGET/bx" install 2>&1); then
         case "$out" in
-            *"already sources"*) skip "~/.bashrc already sources init.sh" ;;
-            *)                   done_ "~/.bashrc sources ~/.bin/init.sh" ;;
+            *"already canonical"*) skip "~/.bashrc already canonical" ;;
+            *"replaced"*)          done_ "~/.bashrc reduced to the bx hook ($(grep -o 'previous copy: [^ ]*' <<< "$out"))" ;;
+            *)                     done_ "~/.bashrc created with the bx hook" ;;
         esac
     else
         failed "bx install: $out"
@@ -542,13 +543,13 @@ verify() {
 
     local out loaded fails
     out=$(env -i HOME="$HOME" TERM=dumb PATH="/usr/bin:/bin" \
-          bash -c '. "$HOME/.bin/init.sh" >/dev/null 2>&1; echo "$BX_MODULES_LOADED|${BX_MODULES_FAILED:-}"')
+          BX_FORCE_LOAD=1 bash -c '. "$HOME/.bin/init.sh" >/dev/null 2>&1; echo "$BX_MODULES_LOADED|${BX_MODULES_FAILED:-}"')
     loaded=${out%%|*}; fails=${out#*|}
     if [[ -n "$fails" ]]; then failed "fresh shell: modules failed: $fails"
     else done_ "fresh shell loads $loaded modules, none failed"; fi
 
     # selftest covers doctor, the clean-env load, guards and metadata.
-    if (bash -c '. "$HOME/.bin/init.sh" >/dev/null 2>&1; "$HOME/.bin/bx" selftest' >/dev/null 2>&1); then
+    if (BX_FORCE_LOAD=1 bash -c '. "$HOME/.bin/init.sh" >/dev/null 2>&1; "$HOME/.bin/bx" selftest' >/dev/null 2>&1); then
         done_ "bx selftest (includes bx doctor)"
     else
         failed "bx selftest — run it for details"
