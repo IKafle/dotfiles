@@ -1,0 +1,43 @@
+# base / shell
+curl
+wget
+gnupg
+ca-certificates
+openssh-client
+gawk
+bc
+jq
+zip
+unzip
+p7zip-full
+python3
+vim
+emacs
+fonts-jetbrains-mono
+
+# system / hardware
+iproute2
+lm-sensors
+htop
+iotop
+ncdu
+lsof
+upower
+cpu-checker
+
+# network
+network-manager
+wireguard-tools
+wireless-tools
+iw
+traceroute
+bmon
+nload
+
+# desktop
+libnotify-bin
+xdg-utils
+wl-clipboard
+xclip
+pulseaudio-utils
+cowsay

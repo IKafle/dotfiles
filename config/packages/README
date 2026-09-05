@@ -1,0 +1,15 @@
+Package lists consumed by tools/bootstrap.sh, selected from /etc/os-release:
+
+  <ID>.list                 every release of that distro      (ubuntu.list)
+  <ID>-<VERSION_ID>.list    one release only, applied after   (ubuntu-26.04.list)
+  <ID_LIKE>.list            fallback when <ID>.list is absent (Mint → ubuntu.list)
+
+One package per line. `# comment` and blank lines are ignored. A leading `-`
+removes a package pulled in by an earlier list (e.g. `-cpu-checker` in a
+release file where the package was dropped). Only apt-family distros are
+installed today; other families are detected, reported and skipped.
+
+Every entry maps to a command the modules, plugins or tools actually call.
+Cloud CLIs (aws/gcloud/az/kubectl) and language version managers are
+project tooling, not harness deps — leave them out; the modules degrade
+gracefully without them.

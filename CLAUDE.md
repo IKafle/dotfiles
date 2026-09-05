@@ -17,6 +17,7 @@
 11. **Keep CLAUDE.md ≤ 150 lines.** If your edit pushes it over, trim before stopping.
 12. Update README.md for user-visible changes (new command/folder/tool/plugin, install-flow change, removed capability).
 13. `tools/bootstrap.sh` is the only fresh-machine entrypoint. Any new install-time step goes there as an idempotent phase (check state → skip or act), never as a manual README step.
+14. Nothing OS-, version- or desktop-specific is hard-coded in bootstrap. Package names go in `config/packages/<ID>.list` (or `<ID>-<VERSION_ID>.list`); repos, identity and download sources go in `config/bootstrap.conf`. Bootstrap detects the OS from `/etc/os-release` and exports `BX_OS_*` for the tools it runs (`docs/adr/0004-install-deps-are-config.md`).
 
 ## Architecture
 
@@ -31,6 +32,7 @@
 ├── plugins/            customizations living OUTSIDE ~/.bin/
 ├── enabled-plugins/    symlinks → plugins/
 ├── completions/        bash completions (auto-sourced)
+├── config/             install-time data read by bootstrap: bootstrap.conf + packages/<ID>[-<VERSION_ID>].list
 ├── claude/             config consumed by Claude Code
 └── docs/               notes, references & adr/ (architecture decision records)
 ```

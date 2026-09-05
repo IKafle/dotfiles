@@ -5,10 +5,15 @@
 #   git clone git@github.com:IKafle/dotfiles.git && bash dotfiles/tools/bootstrap.sh [flags]
 #   bx run bootstrap [flags]            # re-run any time; every step is a no-op when already done
 #
+# Configuration (ADR-0004): config/bootstrap.conf holds repos, identity and
+# download sources; config/packages/<ID>[-<VERSION_ID>].list holds the package
+# names for the OS detected from /etc/os-release. Precedence for any value:
+# flag > BX_<KEY> env var > config file. Nothing OS-specific lives in here.
+#
 # Flags:
-#   --todo-repo <url>   todo app repo to clone to ~/todo (default: BX_TODO_REPO or git@github.com:IKafle/todo.git)
-#   --git-name <name>   global git identity to enforce (default: BX_GIT_NAME or "ishwor kafle")
-#   --git-email <addr>  ... and its email (default: BX_GIT_EMAIL or hello.ishworkafle@gmail.com)
+#   --todo-repo <url>   override TODO_REPO
+#   --git-name <name>   override GIT_NAME
+#   --git-email <addr>  override GIT_EMAIL
 #   --no-apt            skip the apt package step
 #   --no-gh             skip GitHub CLI install
 #   --no-claude         skip Claude Code CLI install + status-line setup
@@ -29,28 +34,17 @@ ROOT=$(dirname "$(dirname "$SELF")")
 DRY_RUN=0
 WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_VAULT=0
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
-TODO_REPO="${BX_TODO_REPO:-git@github.com:IKafle/todo.git}"
-GIT_NAME="${BX_GIT_NAME:-ishwor kafle}"
-GIT_EMAIL="${BX_GIT_EMAIL:-hello.ishworkafle@gmail.com}"
-ARGOS_UUID="argos@pew.worldwidemann.com"
-# extensions.gnome.org still serves the 2019 Argos release (GNOME 3.32 only);
-# upstream master declares GNOME 45+, so install from the repo tarball.
-ARGOS_TARBALL="https://codeload.github.com/p-e-w/argos/tar.gz/master"
+CONFIG_DIR="$ROOT/config"
+OS_RELEASE_FILE="${BX_OS_RELEASE_FILE:-/etc/os-release}"
 
-# Every external command the modules, plugins and tools call, mapped to its
-# Ubuntu package. Cloud CLIs (aws/gcloud/az/kubectl) and language version
-# managers are deliberately absent: they are project tooling, not harness deps.
-APT_PACKAGES=(
-    # base / shell
-    curl wget gnupg ca-certificates openssh-client gawk bc jq zip unzip p7zip-full
-    python3 vim emacs fonts-jetbrains-mono
-    # system / hardware
-    iproute2 lm-sensors htop iotop ncdu lsof upower cpu-checker
-    # network
-    network-manager wireguard-tools wireless-tools iw traceroute bmon nload
-    # desktop
-    libnotify-bin xdg-utils wl-clipboard xclip pulseaudio-utils cowsay
-)
+# Filled by load_config (file) / env / flags — see precedence above.
+TODO_REPO="" GIT_NAME="" GIT_EMAIL=""
+ARGOS_UUID="" ARGOS_TARBALL="" ARGOS_TARBALL_SUBDIR="" CLAUDE_INSTALLER=""
+declare -A FLAG_OVERRIDE=()
+
+# Filled by detect_os.
+OS_ID="" OS_VERSION="" OS_CODENAME="" OS_LIKE="" OS_KERNEL="" GNOME_MAJOR=""
+APT_PACKAGES=()
 
 FAILED=() SKIPPED=() DONE=()
 
@@ -88,14 +82,14 @@ parse_args() {
     while (( $# )); do
         case "$1" in
             --todo-repo)   [[ -n "${2:-}" ]] || { bx_err "--todo-repo needs a url"; exit 2; }
-                           TODO_REPO=$2; shift ;;
-            --todo-repo=*) TODO_REPO=${1#*=} ;;
+                           FLAG_OVERRIDE[TODO_REPO]=$2; shift ;;
+            --todo-repo=*) FLAG_OVERRIDE[TODO_REPO]=${1#*=} ;;
             --git-name)    [[ -n "${2:-}" ]] || { bx_err "--git-name needs a value"; exit 2; }
-                           GIT_NAME=$2; shift ;;
-            --git-name=*)  GIT_NAME=${1#*=} ;;
+                           FLAG_OVERRIDE[GIT_NAME]=$2; shift ;;
+            --git-name=*)  FLAG_OVERRIDE[GIT_NAME]=${1#*=} ;;
             --git-email)   [[ -n "${2:-}" ]] || { bx_err "--git-email needs a value"; exit 2; }
-                           GIT_EMAIL=$2; shift ;;
-            --git-email=*) GIT_EMAIL=${1#*=} ;;
+                           FLAG_OVERRIDE[GIT_EMAIL]=$2; shift ;;
+            --git-email=*) FLAG_OVERRIDE[GIT_EMAIL]=${1#*=} ;;
             --no-docker)   WITH_DOCKER=0 ;;
             --no-geekbar)  WITH_GEEKBAR=0 ;;
             --vault)       WITH_VAULT=1 ;;
@@ -110,6 +104,73 @@ parse_args() {
         shift
     done
 }
+
+# ── Configuration & OS detection (ADR-0004) ─────────────────────
+# KEY=VALUE parser rather than `source`: config is data, not code.
+load_config() {
+    local f="$CONFIG_DIR/bootstrap.conf" line key val
+    [[ -f "$f" ]] || { bx_err "missing $f"; exit 1; }
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=${line%%#*}; line=${line#"${line%%[![:space:]]*}"}; line=${line%"${line##*[![:space:]]}"}
+        [[ -z "$line" ]] && continue
+        key=${line%%=*}; val=${line#*=}
+        [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || { bx_warn "bootstrap.conf: ignoring malformed line: $line"; continue; }
+        val=${val#\"}; val=${val%\"}
+        printf -v "$key" '%s' "$val"
+    done < "$f"
+
+    local k envk
+    for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR CLAUDE_INSTALLER; do
+        envk="BX_$k"
+        [[ -n "${!envk:-}" ]] && printf -v "$k" '%s' "${!envk}"
+        [[ -n "${FLAG_OVERRIDE[$k]:-}" ]] && printf -v "$k" '%s' "${FLAG_OVERRIDE[$k]}"
+        [[ -n "${!k}" ]] || { bx_err "bootstrap.conf: $k is not set"; exit 1; }
+    done
+}
+
+detect_os() {
+    if [[ -f "$OS_RELEASE_FILE" ]]; then
+        # shellcheck disable=SC1090
+        OS_ID=$(. "$OS_RELEASE_FILE"; printf '%s' "${ID:-}")
+        OS_VERSION=$(. "$OS_RELEASE_FILE"; printf '%s' "${VERSION_ID:-}")
+        OS_CODENAME=$(. "$OS_RELEASE_FILE"; printf '%s' "${VERSION_CODENAME:-}")
+        OS_LIKE=$(. "$OS_RELEASE_FILE"; printf '%s' "${ID_LIKE:-}")
+    fi
+    OS_KERNEL=$(uname -r)
+    GNOME_MAJOR=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
+    export BX_OS_ID="$OS_ID" BX_OS_VERSION="$OS_VERSION" BX_OS_CODENAME="$OS_CODENAME" \
+           BX_OS_LIKE="$OS_LIKE" BX_OS_KERNEL="$OS_KERNEL" BX_GNOME_MAJOR="$GNOME_MAJOR"
+}
+
+# Resolve config/packages/*.list for the detected OS into APT_PACKAGES.
+# Order: <ID>.list (or first ID_LIKE with a list), then <ID>-<VERSION_ID>.list.
+# A leading '-' removes a package added earlier.
+load_packages() {
+    local dir="$CONFIG_DIR/packages" base="" like f line
+    APT_PACKAGES=(); PACKAGE_LISTS=()
+    if [[ -f "$dir/$OS_ID.list" ]]; then
+        base="$OS_ID"
+    else
+        for like in $OS_LIKE; do [[ -f "$dir/$like.list" ]] && { base="$like"; break; }; done
+    fi
+    [[ -n "$base" ]] || return 1
+    local -A want=()
+    local -a order=()
+    for f in "$dir/$base.list" "$dir/$OS_ID-$OS_VERSION.list"; do
+        [[ -f "$f" ]] || continue
+        PACKAGE_LISTS+=("${f##*/}")
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line=${line%%#*}; line=${line//[[:space:]]/}
+            [[ -z "$line" ]] && continue
+            if [[ "$line" == -* ]]; then unset "want[${line#-}]"
+            else want[$line]=1; order+=("$line"); fi
+        done < "$f"
+    done
+    local p
+    for p in "${order[@]}"; do [[ -n "${want[$p]:-}" ]] && APT_PACKAGES+=("$p"); done
+    return 0
+}
+PACKAGE_LISTS=()
 
 # ── Phase 0: pre-flight ─────────────────────────────────────────
 preflight() {
@@ -133,6 +194,7 @@ preflight() {
         exit 1
     fi
     bx_ok "checkout: $ROOT"
+    bx_ok "os: ${OS_ID:-unknown} ${OS_VERSION:-?} (${OS_CODENAME:-no codename}) · kernel $OS_KERNEL · gnome ${GNOME_MAJOR:-none}"
     (( DRY_RUN )) && bx_warn "dry-run: no changes will be made"
     return 0
 }
@@ -177,7 +239,7 @@ relocate() {
 reexec_from_target() {
     if (( DRY_RUN )); then
         bx_dim "  [dry-run] would re-exec from $TARGET/tools/bootstrap.sh"
-        ROOT=$TARGET
+        ROOT=$TARGET; CONFIG_DIR="$ROOT/config"
         return 0
     fi
     [[ -n "${BX_BOOTSTRAP_REEXEC:-}" ]] && { bx_err "re-exec loop detected"; exit 1; }
@@ -240,7 +302,15 @@ need_sudo() {
 apt_packages() {
     phase "apt packages"
     if (( SKIP_APT )); then skip "apt (--no-apt)"; return 0; fi
-    if ! command -v apt-get >/dev/null; then skip "apt-get not found (non-Debian host)"; return 0; fi
+    if ! load_packages; then
+        skip "no package list for ${OS_ID:-unknown} ${OS_VERSION:-} — add config/packages/${OS_ID:-<id>}.list"
+        return 0
+    fi
+    bx_dim "  lists: ${PACKAGE_LISTS[*]} (${#APT_PACKAGES[@]} packages)"
+    if ! command -v apt-get >/dev/null; then
+        skip "apt-get not found — only apt-family installs are implemented (ADR-0004)"
+        return 0
+    fi
 
     local missing=() p
     for p in "${APT_PACKAGES[@]}"; do
@@ -319,9 +389,9 @@ claude_cli() {
     phase "Claude Code CLI"
     if (( SKIP_CLAUDE )); then skip "claude CLI (--no-claude)"; return 0; fi
     if command -v claude >/dev/null || [[ -x "$HOME/.local/bin/claude" ]]; then skip "claude already installed"; return 0; fi
-    if (( DRY_RUN )); then bx_dim "  [dry-run] curl -fsSL https://claude.ai/install.sh | bash"; return 0; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] curl -fsSL $CLAUDE_INSTALLER | bash"; return 0; fi
     # Official native installer: user-local (~/.local/bin), no sudo, self-updating.
-    if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1; then
+    if curl -fsSL "$CLAUDE_INSTALLER" | bash >/dev/null 2>&1; then
         done_ "claude CLI installed to ~/.local/bin (run \`claude\` once to log in)"
     else
         failed "claude CLI install — see https://code.claude.com/docs/en/setup"
@@ -361,18 +431,18 @@ argos_installed() {
 }
 
 install_argos() {
-    local shell_ver tmp zip
-    shell_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
+    local shell_ver=$GNOME_MAJOR tmp zip src
     [[ -n "$shell_ver" ]] || { failed "gnome-shell version undetectable"; return 1; }
     tmp=$(mktemp -d)
     if ! curl -fsSL "$ARGOS_TARBALL" | tar -xz -C "$tmp" 2>/dev/null; then
-        failed "download Argos from github.com/p-e-w/argos"; rm -rf "$tmp"; return 1
+        failed "download Argos from $ARGOS_TARBALL"; rm -rf "$tmp"; return 1
     fi
-    if ! grep -q "\"$shell_ver\"" "$tmp"/argos-master/"$ARGOS_UUID"/metadata.json 2>/dev/null; then
-        failed "Argos master does not declare GNOME Shell $shell_ver — check github.com/p-e-w/argos"; rm -rf "$tmp"; return 1
+    src="$tmp/$ARGOS_TARBALL_SUBDIR/$ARGOS_UUID"
+    if ! grep -q "\"$shell_ver\"" "$src/metadata.json" 2>/dev/null; then
+        failed "Argos at $ARGOS_TARBALL does not declare GNOME Shell $shell_ver"; rm -rf "$tmp"; return 1
     fi
     zip="$tmp/argos.zip"
-    ( cd "$tmp/argos-master/$ARGOS_UUID" && zip -qr "$zip" . ) || { failed "zip Argos"; rm -rf "$tmp"; return 1; }
+    ( cd "$src" && zip -qr "$zip" . ) || { failed "zip Argos"; rm -rf "$tmp"; return 1; }
     if ! gnome-extensions install --force "$zip" >/dev/null 2>&1; then
         failed "gnome-extensions install Argos"; rm -rf "$tmp"; return 1
     fi
@@ -388,7 +458,7 @@ geekbar() {
     if argos_installed; then
         skip "Argos extension present"
     elif (( DRY_RUN )); then
-        bx_dim "  [dry-run] install Argos from github.com/p-e-w/argos master"
+        bx_dim "  [dry-run] install Argos from $ARGOS_TARBALL"
     else
         install_argos || return 1
     fi
@@ -449,6 +519,8 @@ summary() {
 main() {
     ORIG_ARGS=("$@")
     parse_args "$@"
+    load_config
+    detect_os
     preflight
     relocate
     wire_shell

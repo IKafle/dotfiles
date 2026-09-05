@@ -30,6 +30,13 @@ Argos extension + geekbar plugin (GNOME only), then runs `bx doctor` +
 | `--no-verify`       | skip doctor/selftest/tests at the end                     |
 | `--dry-run`         | print what would happen; change nothing                   |
 
+Everything OS-dependent is data, not script (ADR-0004): bootstrap reads
+`config/bootstrap.conf` (todo repo, git identity, Argos and Claude sources)
+and picks `config/packages/<ID>.list` plus `<ID>-<VERSION_ID>.list` from
+`/etc/os-release` (`ID_LIKE` as fallback, so Mint uses `ubuntu.list`). A new
+distro or release is a new list file, not a script change. Any value can be
+overridden per run: flag > `BX_<KEY>` env var > file.
+
 Cloud CLIs (aws/gcloud/az/kubectl) and language version managers are not
 installed: the modules degrade gracefully without them.
 
@@ -69,6 +76,7 @@ bx help           # show all commands
 ├── plugins/          # customizations that live OUTSIDE ~/.bin/ (Argos, etc.)
 ├── enabled-plugins/  # symlinks → plugins/ — like enabled/, for plugins
 ├── completions/      # bash completion scripts (auto-loaded by prompt module)
+├── config/           # install-time data for bootstrap (repos, identity, per-OS package lists)
 ├── claude/           # config consumed by Claude Code
 └── docs/             # notes & references
 ```
