@@ -1,246 +1,110 @@
-# `~/.bin` — central source of truth for shell customization
+# `~/.bin` — shell customization, one tree
 
-This directory is the single entry point for all my shell automation.
-`~/.bashrc` sources `~/.bin/init.sh` and nothing else interesting happens
-outside this tree.
+Everything the shell needs lives here. `~/.bashrc` contains one line,
+`. ~/.bin/init.sh`, and `init.sh` sources every module linked in `enabled/`.
+The `bx` CLI manages the tree.
 
-## Install on a new machine
+## Install
 
 ```bash
 git clone git@github.com:IKafle/dotfiles.git
-bash dotfiles/tools/bootstrap.sh            # moves the clone to ~/.bin, wires ~/.bashrc, installs deps, verifies
-bash dotfiles/tools/bootstrap.sh --dry-run  # preview first if you like
+bash dotfiles/tools/bootstrap.sh
 ```
 
-`bootstrap` is the single entrypoint and is idempotent — re-run it any time
-with `bx run bootstrap`; every step skips itself when already done. It
-relocates the tree to `~/.bin`, runs `bx install`, enforces the global git
-identity (bx is its source of truth), installs every apt package the modules,
-plugins and tools call, clones the todo app to `~/todo`, lays out `~/vault`
-(sweeping loose files from `~` into it), installs the GitHub CLI, the Claude Code CLI + status line + the plugins listed
-in `config/bootstrap.conf` (`CLAUDE_PLUGINS`), Docker, the
-Argos extension + geekbar plugin and the Super-d rofi launcher (GNOME only),
-then runs `bx doctor` +
-`bx selftest` in a fresh shell. Each step can be skipped:
+Bootstrap moves the clone to `~/.bin`, wires `~/.bashrc`, sets the git
+identity, installs packages, tools and plugins, and verifies with a fresh
+shell. It is idempotent: `bx run bootstrap` any time, every step skips itself
+when done. One sudo prompt. Log out and back in afterwards for GNOME
+extensions and the docker group.
 
-| flag                | effect                                                    |
-|---------------------|-----------------------------------------------------------|
-| `--todo-repo <url>` | override the todo app repo (default `IKafle/todo`, or `BX_TODO_REPO`) |
-| `--git-name` `--git-email` | global git identity to enforce (or `BX_GIT_NAME` / `BX_GIT_EMAIL`) |
-| `--no-apt` `--no-gh` `--no-claude` | skip that installer                       |
-| `--no-docker` `--no-geekbar` `--no-rofi` `--no-vault` | skip that installer    |
-| `--no-verify`       | skip doctor/selftest/tests at the end                     |
-| `--dry-run`         | print what would happen; change nothing                   |
+| flag | effect |
+|---|---|
+| `--dry-run` | print the plan, change nothing |
+| `--no-apt` `--no-gh` `--no-claude` `--no-docker` `--no-geekbar` `--no-rofi` `--no-vault` | skip that step |
+| `--todo-repo`, `--git-name`, `--git-email` | override a config value for this run |
+| `--no-verify` | skip doctor / selftest / tests |
 
-Everything OS-dependent is data, not script (ADR-0004): bootstrap reads
-`config/bootstrap.conf` (todo repo, git identity, Argos and Claude sources)
-and picks `config/packages/<ID>.list` plus `<ID>-<VERSION_ID>.list` from
-`/etc/os-release` (`ID_LIKE` as fallback, so Mint uses `ubuntu.list`). A new
-distro or release is a new list file, not a script change. Any value can be
-overridden per run: flag > `BX_<KEY>` env var > file.
+What gets installed is data, not script (`docs/adr/0004`):
 
-Cloud CLIs (aws/gcloud/az/kubectl) and language version managers are not
-installed: the modules degrade gracefully without them.
+- `config/bootstrap.conf` — repos, git identity, download sources, Claude plugins.
+- `config/packages/<ID>.list` and `<ID>-<VERSION_ID>.list` — package names,
+  picked from `/etc/os-release`. A new distro or release is a new file.
+- Precedence: flag > `BX_<KEY>` env var > file.
 
-## Quick start
+## Daily use
 
 ```bash
-bx                # short status
-bx ls             # list all modules, ✔ enabled / ✘ disabled
-bx enable docker  # symlink a module into enabled/ (loads on next shell)
-bx disable docker # remove the symlink
-bx reload         # re-source enabled modules in THIS shell
-bx edit aliases   # open module in $EDITOR; reload on save
-bx read aliases   # print module contents to stdout (alias: cat, show)
-bx new <name>     # scaffold a new module from template
-bx doctor         # health check: missing symlinks, failed modules, bashrc hook
-bx selftest       # full regression check (load, idempotency, guards, metadata)
-bx run <tool>     # run a one-shot tool from tools/  (e.g. bx run docker-init)
-bx tools          # list available tools
-bx plugin ls      # list plugins (external customizations like Argos scripts)
-bx plugin disable geekbar   # remove the external symlink (source kept)
-bx plugin enable  geekbar   # restore the external symlink
-bx install        # idempotently wire ~/.bashrc to source init.sh
-bx help           # show all commands
+bx                    # status
+bx ls                 # modules, ✔ enabled / ✘ disabled
+bx enable <name>      # link a module into enabled/
+bx disable <name>     # unlink it
+bx reload             # re-source in this shell
+bx edit <name>        # open in $EDITOR, reload on save
+bx new <name>         # scaffold a module   (--tool for a tool)
+bx run <tool>         # run a tool from tools/
+bx plugin <verb>      # ls / enable / disable / new / doctor
+bx doctor             # health check
+bx selftest           # full regression check
+bx help
 ```
 
 ## Layout
 
 ```
 ~/.bin/
-├── init.sh           # master loader (~/.bashrc sources this)
-├── bx                # the CLI command
-├── CLAUDE.md         # contract for agents working in this tree
-├── lib/              # shared helpers (color, logging)
-├── modules/          # all available modules (each is a .sh file)
-├── enabled/          # symlinks → modules/ — filesystem IS the truth
-├── tools/            # one-shot scripts (installers, init scripts)
-├── plugins/          # customizations that live OUTSIDE ~/.bin/ (Argos, etc.)
-├── enabled-plugins/  # symlinks → plugins/ — like enabled/, for plugins
-├── completions/      # bash completion scripts (auto-loaded by prompt module)
-├── config/           # install-time data for bootstrap (repos, identity, per-OS package lists)
-├── claude/           # config consumed by Claude Code
-└── docs/             # notes & references
+├── init.sh            loader, sourced by ~/.bashrc
+├── bx                 the CLI
+├── lib/               shared helpers
+├── modules/           shell modules (functions, aliases, env)
+├── enabled/           symlinks → modules/   — the filesystem is the truth
+├── tools/             one-shot executables, run via bx run
+├── plugins/           files that must live outside ~/.bin (Argos, …)
+├── enabled-plugins/   symlinks → plugins/
+├── completions/       bash completions, auto-sourced
+├── config/            install-time data read by bootstrap
+├── claude/            Claude Code status line
+├── tests/             shell tests, run by bootstrap
+└── docs/              notes and ADRs
 ```
 
-## Module naming convention
+Modules load in filename order. Prefixes: `10-` env, `20-` aliases,
+`30-` functions, `40-` dev tools, `50-` integrations, `60-` prompt,
+`70-` cosmetic, `80-` motd. Gaps of ten let you wedge new ones in.
 
-Modules are sourced in lexical order. Use a numeric prefix to control order:
+## Tools
 
-| prefix | purpose                                                          |
-|--------|------------------------------------------------------------------|
-| `10-`  | environment (`PATH`, exports, locale)                            |
-| `20-`  | aliases                                                          |
-| `30-`  | functions                                                        |
-| `40-`  | dev-tools / cheatsheets                                          |
-| `50-`  | tool integrations (docker, kubectl, etc.)                        |
-| `60-`  | prompt / completion                                              |
-| `70-`  | greetings / holidays / cosmetic                                  |
-| `80-`  | motd (must be last so it can read load state)                    |
+| tool | purpose |
+|---|---|
+| `bootstrap` | fresh-machine entrypoint |
+| `install-gh` | GitHub CLI from its apt repo |
+| `docker-init` | Docker Engine + Compose |
+| `claude-init` | Claude Code status line |
+| `vault-init` | lay out `~/vault`, sweep loose files from `~` into it |
+| `rofi-init` | bind Super-d to the rofi launcher (GNOME custom shortcut) |
+| `rofi-launcher` | what Super-d runs: `rofi -show drun` |
+| `geekbar-doctor` | check geekbar's dependencies and install |
 
-10-unit gaps let you wedge new modules in between without renaming.
+## Plugins
 
-## Adding a new automation
+Some software wants its file at a fixed path. A plugin keeps the source in
+`plugins/` and symlinks it there when enabled. The entrypoint declares
+`bx-purpose`, `bx-plugin-kind` and `bx-plugin-target` in its header; a
+directory-form plugin may add `postenable.sh`, run after linking.
 
-```bash
-bx new my-thing            # creates modules/45-my-thing.sh from template
-bx enable my-thing         # symlink into enabled/
-bx reload                  # source it into current shell
-```
+**geekbar** is the one plugin: an Argos panel for GNOME with system, network,
+dev, updates and audio widgets, clickable actions, and threshold
+notifications. Configure it in `plugins/geekbar/config.sh`. Bootstrap installs
+Argos from upstream master, since the extensions.gnome.org build only
+declares GNOME 3.32.
 
-Every new automation belongs here. That's the rule.
+## MOTD
 
-## Failure mode visibility
+New terminals show a dashboard: system vitals, the todo card fed by
+`today --data` from `~/todo` (`docs/adr/0003`), and a shortcuts column. It
+adapts to terminal width and reports `bx: N modules loaded`, or a warning
+with `bx doctor` as the next step when something failed.
 
-- New terminals show a `bx: N modules loaded` line in the MOTD panel.
-- Partial load → yellow `⚠ bx: M loaded, N failed — run \`bx doctor\``.
-- `~/.bin/init.sh` never ran → red `⚠ bx: not loaded`.
-- `bx doctor` prints the full diagnosis.
+## For agents
 
-## MOTD dashboard
-
-New terminals (and `bx reload`) render a framed dashboard MOTD: a master header
-(user@host + date) crowned by a dim hairline rule, then three peer-headed
-columns — **◆ system** (os/kernel/load, mem/disk bars, ip, bx status, top
-commands), **◆ today** (the todo card), and **◆ shortcuts** (the cheatsheet) —
-bound by dim vertical dividers that join the top and bottom rules with `┬`/`┴`
-junctions, so the three blocks read as one grid. The today card consumes `today
---data` from the `~/todo` app (ADR-0003) and is pure presentation — it never
-parses `todo.md`. It shows a completion bar, the focus task marked `▸`, dimmed
-`✓` for done, and a `backlog N · done today N` footer; with no plan it reads `no
-plan yet — run today`, and `all done ✓` when the list is clear. The today column
-is skipped silently when the todo app isn't enabled.
-
-The layout is responsive, recomputed per render from the live terminal width.
-The columns are **left-anchored** (every block starts at the left so text reads
-naturally) and separated by **equal gutters** carrying the dividers, so they
-stay grouped as one dashboard. When the width can't hold three columns it falls
-back to two (**system + today** live state | **shortcuts** reference), then to a
-full-width stacked layout on narrow terminals. Resize, then open a new terminal
-(or `bx reload`) to switch tiers.
-
-## Tools (one-shot installers)
-
-| tool                       | purpose                                  |
-|----------------------------|------------------------------------------|
-| `bootstrap`                | fresh-machine entrypoint (idempotent)    |
-| `docker-init`              | install docker-ce + compose on Ubuntu    |
-| `vault-init`               | bootstrap `~/vault` workspace            |
-| `claude-init`              | wire the Claude Code status line         |
-| `geekbar-doctor`           | diagnose the geekbar plugin install      |
-| `rofi-init`                | bind Super-d to the rofi launcher (GNOME)|
-| `rofi-launcher`            | the launcher itself: `rofi -show drun`   |
-| `install-gh`               | install the GitHub CLI from its apt repo |
-
-Run with `bx run <tool>` or directly: `bash ~/.bin/tools/<tool>.sh`.
-
-## Plugins (customizations that live outside `~/.bin/`)
-
-Some tools insist on finding their config at a specific path — Argos
-scripts at `~/.config/argos/`, GNOME extensions, systemd user units.
-Plugins keep the source-of-truth file in `~/.bin/plugins/` (so it's in
-git) and symlink it into the external location when enabled.
-
-```bash
-bx plugin ls                              # list plugins, ✔/✘
-bx plugin enable geekbar                  # creates ~/.config/argos/geekbar.2s+.sh → plugins/
-bx plugin disable geekbar                 # removes that symlink (source kept in plugins/)
-bx plugin new mywidget --kind argos       # scaffold a new plugin (file form)
-bx plugin new mywidget --kind argos --dir # scaffold a new plugin (directory form)
-bx plugin doctor                          # verify each enabled plugin's external symlink
-bx plugin help                            # full plugin subcommand reference
-```
-
-Plugins come in two forms. **File form** — `~/.bin/plugins/<name>.<kind>.sh`
-— for single-file plugins:
-
-```bash
-# bx-purpose: GNOME panel widget showing system stats
-# bx-plugin-kind: argos
-# bx-plugin-target: ~/.config/argos/geekbar.2s+.sh
-```
-
-**Directory form** — `~/.bin/plugins/<name>/` with entrypoint
-`<name>.<kind>.sh` plus sibling files (`lib.sh`, `widgets/`, etc.) — for
-plugins that span multiple files. If `plugins/<name>/postenable.sh`
-exists and is executable, `bx plugin enable <name>` runs it after
-linking, with `BX_PLUGIN_NAME` and `BX_PLUGIN_DIR` in the environment.
-
-| plugin    | kind  | target                              |
-|-----------|-------|-------------------------------------|
-| `geekbar` | argos | `~/.config/argos/geekbar.2s+.sh`    |
-
-Supported kinds today: `argos`. Adding a new kind requires editing
-`_bx_plugin_apply` in `bx` — see `CLAUDE.md` for the contract.
-
-## Geekbar
-
-`geekbar` is the directory-form Argos plugin under
-`~/.bin/plugins/geekbar/`. It paints a compact GNOME top-panel readout
-that refreshes every 2s and unfolds into a categorised dropdown of ~24
-widgets covering:
-
-- **System** — uptime, cpu (temp/freq/usage), ram, load, top processes,
-  disk, I/O wait, battery.
-- **Network** — connectivity, default route, vpn, public IP, listening
-  ports, ssh-agent keys, DNS.
-- **Dev** — git status of tracked repos, docker, kubectl context,
-  cloud auth (AWS/GCP).
-- **Updates** — apt upgrade counts (with a security-only sub-count).
-- **Audio / extras** — volume + mic, weather, clock.
-
-The dropdown menu items are clickable: kill a runaway process, open
-`htop -p <pid>`, fetch a git repo, run `ncdu` on `/home`, copy the
-cached public IP, restart Argos, etc. Click handlers route through
-`plugins/geekbar/actions.sh`.
-
-Geekbar also fires **edge-triggered desktop notifications** when a
-metric crosses a warn/crit threshold (CPU temp, RAM, disk, battery,
-APT security count, …). State lives under
-`~/.cache/geekbar/` and `~/.local/state/geekbar/` so notifications
-don't repeat until the bucket changes.
-
-`bx run bootstrap` installs Argos from upstream master (the extensions.gnome.org
-build is 2019-era and only declares GNOME 3.32) and enables the plugin; log out
-and back in once for GNOME to load the extension.
-
-```bash
-bx plugin enable geekbar     # symlink into ~/.config/argos/
-bx enable geekbar-track      # shell hook: refresh git/cloud caches on cd / aws login
-bx run geekbar-doctor        # verify the install, missing deps, stale state
-```
-
-## Rofi launcher
-
-`Super-d` opens `rofi -show drun`. `bx run rofi-init` (part of bootstrap) frees
-`<Super>d` from Ubuntu's show-desktop default and registers a GNOME custom
-shortcut pointing at `tools/rofi-launcher.sh` — no keybinding daemon, native
-on Wayland, idempotent. rofi 2.x from apt is Wayland-capable, so nothing is
-built from source. Change the key or command at the top of `tools/rofi-init.sh`
-and re-run it.
-
-Customisation lives in **one file**: `~/.bin/plugins/geekbar/config.sh`.
-Edit the `BAR_WIDGETS` array (what shows in the panel), the
-`MENU_SECTIONS` / `MENU_SECTION_<name>` arrays (what shows in the
-dropdown and in what order), and the per-widget thresholds
-(`CPU_TEMP_WARN`, `RAM_PCT_CRIT`, `DISK_PCT_WARN`, …).
+`CLAUDE.md` is the contract: where things go, naming, load guards, what to
+run before committing. Decisions with a reason are in `docs/adr/`.
