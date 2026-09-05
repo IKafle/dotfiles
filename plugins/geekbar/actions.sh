@@ -254,20 +254,6 @@ case "$action" in
             run_in_term "bx run geekbar-doctor"
         fi
         ;;
-    geekbar-test)
-        if [[ -x "$HOME/.bin/tools/geekbar-test.sh" ]]; then
-            run_in_term "$HOME/.bin/tools/geekbar-test.sh"
-        else
-            run_in_term "bx run geekbar-test"
-        fi
-        ;;
-    show-widget-catalog)
-        if [[ -x "$HOME/.bin/tools/geekbar-test.sh" ]]; then
-            run_in_term "$HOME/.bin/tools/geekbar-test.sh"
-        else
-            run_in_term "bx run geekbar-test"
-        fi
-        ;;
 
     # ── reboot ───────────────────────────────────────────────
     reboot-now)
