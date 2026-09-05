@@ -222,6 +222,15 @@ check_system() {
     fi
     if (( argos_ok )); then
         yes "Argos GNOME extension installed"
+        # Installed is not enabled: on Wayland the enable after a fresh install
+        # fails until the next login, and then nothing retries it.
+        if have gnome-extensions; then
+            if gnome-extensions list --enabled 2>/dev/null | grep -qi argos; then
+                yes "Argos GNOME extension enabled"
+            else
+                no "Argos GNOME extension disabled  → gnome-extensions enable argos@pew.worldwidemann.com"
+            fi
+        fi
     else
         no "Argos GNOME extension missing  → install: https://extensions.gnome.org/extension/1176/argos/"
         VISUAL_FAIL=$((VISUAL_FAIL + 1))
@@ -231,7 +240,7 @@ check_system() {
     if have fc-list && fc-list 2>/dev/null | grep -qi 'JetBrainsMono Nerd Font'; then
         yes "JetBrainsMono Nerd Font installed"
     else
-        no "JetBrainsMono Nerd Font missing  → install: sudo apt install fonts-jetbrains-mono   (or https://www.nerdfonts.com/font-downloads)"
+        no "JetBrainsMono Nerd Font missing  → the plain fonts-jetbrains-mono package is not enough; get the Nerd Font build from https://www.nerdfonts.com/font-downloads into ~/.local/share/fonts"
         VISUAL_FAIL=$((VISUAL_FAIL + 1))
     fi
 

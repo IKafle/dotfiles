@@ -483,6 +483,24 @@ argos_installed() {
     gnome-extensions list 2>/dev/null | grep -qx "$ARGOS_UUID" \
         || [[ -f "$HOME/.local/share/gnome-shell/extensions/$ARGOS_UUID/metadata.json" ]]
 }
+argos_enabled() { gnome-extensions list --enabled 2>/dev/null | grep -qx "$ARGOS_UUID"; }
+
+# `enable` right after `install` fails silently on Wayland: the shell only sees a
+# new extension after the next login. So a re-run must retry it — otherwise
+# Argos sits on disk, disabled, and geekbar never appears.
+argos_ensure_enabled() {
+    if argos_enabled; then skip "Argos extension enabled"; return 0; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] gnome-extensions enable $ARGOS_UUID"; return 0; fi
+    if gnome-extensions list 2>/dev/null | grep -qx "$ARGOS_UUID"; then
+        if gnome-extensions enable "$ARGOS_UUID" 2>/dev/null && argos_enabled; then
+            done_ "Argos extension enabled"
+        else
+            failed "gnome-extensions enable $ARGOS_UUID"; return 1
+        fi
+    else
+        bx_warn "Argos is installed but the shell has not loaded it yet — log out and back in, then re-run bootstrap to enable it"
+    fi
+}
 
 install_argos() {
     local shell_ver=$GNOME_MAJOR tmp zip src
@@ -511,6 +529,7 @@ geekbar() {
     if ! command -v gnome-extensions >/dev/null; then skip "not a GNOME session"; return 0; fi
     if argos_installed; then
         skip "Argos extension present"
+        argos_ensure_enabled || return 1
     elif (( DRY_RUN )); then
         bx_dim "  [dry-run] install Argos from $ARGOS_TARBALL"
     else
