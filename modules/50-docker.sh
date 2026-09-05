@@ -52,7 +52,7 @@
       if ! command -v docker >/dev/null 2>&1; then
           echo "Error: docker is not installed or not in PATH"
           echo "  → Install Docker Engine:   bx run docker-init"
-          echo "  → Install Docker Desktop:  bx run docker-desktop-init"
+          echo "  → Docker Desktop (optional):  https://docs.docker.com/desktop/setup/install/linux/"
           return 1
       fi
   }
@@ -260,7 +260,7 @@
       if ! _dcs_context_exists "$_DCS_CTX_DESKTOP"; then
           echo "Error: Docker Desktop context '$_DCS_CTX_DESKTOP' not found"
           echo "  → Docker Desktop is not installed or hasn't created its context."
-          echo "  → Install it: bx run docker-desktop-init"
+          echo "  → Install it: https://docs.docker.com/desktop/setup/install/linux/"
           echo "  → Or launch Docker Desktop once so it registers the context"
           echo "  → Verify: docker context ls"
           echo "  → Then try again: use_sandbox"
@@ -379,7 +379,7 @@
       if _dcs_context_exists "$_DCS_CTX_DESKTOP"; then
           echo "  $_DCS_CTX_DESKTOP (Docker Desktop)   present"
       else
-          echo "  $_DCS_CTX_DESKTOP (Docker Desktop)   NOT FOUND → bx run docker-desktop-init"
+          echo "  $_DCS_CTX_DESKTOP (Docker Desktop)   NOT FOUND (not installed)"
       fi
 
       echo ""
