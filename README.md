@@ -4,6 +4,29 @@ This directory is the single entry point for all my shell automation.
 `~/.bashrc` sources `~/.bin/init.sh` and nothing else interesting happens
 outside this tree.
 
+## Install on a new machine
+
+```bash
+git clone git@github.com:IKafle/dotfiles.git
+bash dotfiles/tools/bootstrap.sh            # moves the clone to ~/.bin, wires ~/.bashrc, installs deps, verifies
+bash dotfiles/tools/bootstrap.sh --dry-run  # preview first if you like
+```
+
+`bootstrap` is the single entrypoint and is idempotent — re-run it any time
+with `bx run bootstrap`; every step skips itself when already done. By default
+it relocates the tree to `~/.bin`, runs `bx install`, installs the apt
+packages the modules and geekbar rely on, sets up the GitHub CLI and the
+Claude Code status line, then runs `bx doctor` + `bx selftest` in a fresh
+shell. Heavier or opinionated steps are opt-in:
+
+| flag                | effect                                                    |
+|---------------------|-----------------------------------------------------------|
+| `--todo-repo <url>` | clone the todo app to `~/todo` (or set `BX_TODO_REPO`)    |
+| `--docker`          | run `docker-init` (adds Docker's apt repo)                |
+| `--geekbar`         | install the Argos GNOME extension, enable the plugin      |
+| `--vault`           | run `vault-init` (also sweeps loose files from `~`)       |
+| `--no-apt` `--no-gh` `--no-claude` `--no-verify` | skip that step              |
+
 ## Quick start
 
 ```bash
@@ -104,6 +127,7 @@ full-width stacked layout on narrow terminals. Resize, then open a new terminal
 
 | tool                       | purpose                                  |
 |----------------------------|------------------------------------------|
+| `bootstrap`                | fresh-machine entrypoint (idempotent)    |
 | `docker-init`              | install docker-ce + compose on Ubuntu    |
 | `docker-desktop-init`      | install Docker Desktop (KVM-isolated)    |
 | `vault-init`               | bootstrap `~/vault` workspace            |
