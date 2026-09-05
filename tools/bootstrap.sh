@@ -40,7 +40,7 @@ OS_RELEASE_FILE="${BX_OS_RELEASE_FILE:-/etc/os-release}"
 
 # Filled by load_config (file) / env / flags — see precedence above.
 TODO_REPO="" GIT_NAME="" GIT_EMAIL=""
-ARGOS_UUID="" ARGOS_TARBALL="" ARGOS_TARBALL_SUBDIR="" CLAUDE_INSTALLER=""
+ARGOS_UUID="" ARGOS_TARBALL="" ARGOS_TARBALL_SUBDIR="" CLAUDE_INSTALLER="" CLAUDE_PLUGINS=""
 declare -A FLAG_OVERRIDE=()
 
 # Filled by detect_os.
@@ -122,11 +122,12 @@ load_config() {
     done < "$f"
 
     local k envk
-    for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR CLAUDE_INSTALLER; do
+    for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR CLAUDE_INSTALLER CLAUDE_PLUGINS; do
         envk="BX_$k"
         [[ -n "${!envk:-}" ]] && printf -v "$k" '%s' "${!envk}"
         [[ -n "${FLAG_OVERRIDE[$k]:-}" ]] && printf -v "$k" '%s' "${FLAG_OVERRIDE[$k]}"
-        [[ -n "${!k}" ]] || { bx_err "bootstrap.conf: $k is not set"; exit 1; }
+        # CLAUDE_PLUGINS may legitimately be empty.
+        [[ -n "${!k}" || "$k" == CLAUDE_PLUGINS ]] || { bx_err "bootstrap.conf: $k is not set"; exit 1; }
     done
 }
 
@@ -416,6 +417,30 @@ claude_statusline() {
     fi
 }
 
+# Plugins from the official marketplace. `claude plugins list --json` ids are
+# <name>@<marketplace>; a bare name in config matches any marketplace.
+claude_plugins() {
+    phase "Claude Code plugins"
+    if (( SKIP_CLAUDE )); then skip "claude plugins (--no-claude)"; return 0; fi
+    [[ -n "${CLAUDE_PLUGINS//[[:space:]]/}" ]] || { skip "CLAUDE_PLUGINS empty in bootstrap.conf"; return 0; }
+    local claude_bin
+    claude_bin=$(command -v claude || echo "$HOME/.local/bin/claude")
+    [[ -x "$claude_bin" ]] || { failed "claude CLI not available — plugins need it"; return 1; }
+    local installed p missing=()
+    installed=$("$claude_bin" plugins list --json 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
+    for p in $CLAUDE_PLUGINS; do
+        grep -qx "$p@.*" <<< "$installed" || grep -qx "$p" <<< "$installed" || missing+=("$p")
+    done
+    if (( ${#missing[@]} == 0 )); then skip "plugins present: $CLAUDE_PLUGINS"; return 0; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] claude plugins install ${missing[*]}"; return 0; fi
+    local bad=()
+    for p in "${missing[@]}"; do
+        "$claude_bin" plugins install "$p" >/dev/null 2>&1 || bad+=("$p")
+    done
+    if (( ${#bad[@]} )); then failed "claude plugins install: ${bad[*]}"
+    else done_ "claude plugins installed: ${missing[*]}"; fi
+}
+
 docker_engine() {
     phase "Docker"
     if (( ! WITH_DOCKER )); then skip "docker-init (--no-docker)"; return 0; fi
@@ -567,6 +592,7 @@ main() {
     github_cli
     claude_cli
     claude_statusline
+    claude_plugins
     docker_engine
     geekbar
     rofi_launcher
