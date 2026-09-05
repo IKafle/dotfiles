@@ -19,4 +19,4 @@ export TODO_SUPPRESS_DAILY_SHOW=1
 
 # Fail silently when the app isn't present, so a missing ~/todo never breaks
 # shell startup.
-[[ -f "$HOME/todo/todo.sh" ]] && source "$HOME/todo/todo.sh"
+[[ -f "$HOME/todo/todo.sh" ]] && source "$HOME/todo/todo.sh" || true
