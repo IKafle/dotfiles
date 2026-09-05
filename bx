@@ -569,7 +569,7 @@ cmd_doctor() {
     fi
 
     # 2. ~/.bashrc hook — accept both tilde-form and expanded path
-    if grep -Eq "(\\\$HOME|~|$HOME)/\.bin/init\.sh" "$HOME/.bashrc" 2>/dev/null; then
+    if _bx_bashrc_hooked; then
         bx_ok "~/.bashrc sources init.sh"
     else
         bx_err "~/.bashrc is missing the source line — run \`bx install\`"
@@ -772,9 +772,15 @@ cmd_tools() {
     return 0
 }
 
+# Accept every spelling of the hook (~, $HOME, expanded, . or source) so
+# install never appends a second line next to one a human wrote.
+_bx_bashrc_hooked() {
+    grep -Eq "^[[:space:]]*(\.|source)[[:space:]]+[\"']?(\\\$HOME|~|$HOME|$BX_HOME|\\\$BX_HOME)(/\.bin)?/init\.sh" "$HOME/.bashrc" 2>/dev/null
+}
+
 cmd_install() {
     local line=". $BX_HOME/init.sh"
-    if grep -Fq "$line" "$HOME/.bashrc" 2>/dev/null; then
+    if _bx_bashrc_hooked; then
         bx_dim "~/.bashrc already sources init.sh — nothing to do"
         return 0
     fi
