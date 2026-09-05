@@ -1,0 +1,23 @@
+# The same checks the pre-commit hook runs, on every push and PR, on a clean
+# Ubuntu — so the contract holds even for changes that bypassed the hook.
+name: contract
+on: [push, pull_request]
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: dotfiles }
+      - name: install as the harness expects (~/.bin)
+        run: |
+          mv "$GITHUB_WORKSPACE/dotfiles" "$HOME/.bin"
+          sudo apt-get update -q && sudo apt-get install -y -q shellcheck
+          "$HOME/.bin/bx" install
+      - name: bx lint
+        run: bash "$HOME/.bin/bx" lint
+      - name: bx selftest
+        run: BX_FORCE_LOAD=1 bash -c '. "$HOME/.bin/init.sh"; "$HOME/.bin/bx" selftest'
+      - name: tests
+        run: for t in "$HOME"/.bin/tests/test_*.sh; do bash "$t"; done
+      - name: bootstrap dry-run
+        run: bash "$HOME/.bin/tools/bootstrap.sh" --dry-run --no-verify

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # bx-purpose: bind Super-d to rofi-launcher via a GNOME custom shortcut (idempotent)
+# bx-tool-kind: installer
 #
 # Uses GNOME's own custom-keybinding schema — no keybinding daemon, works on
 # Wayland, survives logout. Ubuntu binds <Super>d to show-desktop by default;

@@ -32,7 +32,7 @@ alias free='free -h'
 alias psg='ps aux | grep -v grep | grep' # usage: psg python
 alias ports='ss -tulpn'                  # listening ports
 alias myip='curl -s ifconfig.me'         # external IP
-alias iplocal='hostname -I | awk "{print \$1}"'
+iplocal() { hostname -I | awk '{print $1}'; }
 
 # ── Git ───────────────────────────────────────────────────────
 # Convention: oh-my-zsh `git` plugin (curated subset). Functions that

@@ -1,96 +1,116 @@
-# `bx` — contract for agents working in `~/.bin`
+# bx — contract for anyone (human or agent) changing `~/.bin`
 
-`~/.bin` is the single source of truth for the owner's shell customization. Everything loads via `~/.bin/init.sh` and is managed by the `bx` CLI. Custom logic elsewhere (`~/bin/`, `~/.bashrc` body, loose scripts in `$HOME`) breaks the contract.
+`~/.bin` is the single source of truth for the owner's shell. `~/.bashrc` is one
+line, `init.sh` loads `enabled/*.sh`, `bx` manages the tree, `bx run bootstrap`
+reproduces a machine. This file is the policy; **`bx lint` is the enforcement.**
+Every rule below that carries an `L<n>` is checked by `bx lint`, by the
+pre-commit hook, and by CI (`docs/adr/0005`). A rule without an `L` is reviewed
+by reading, so state your compliance in the commit message.
 
-## MUST FOLLOW
+## Non-negotiables
 
-1. New automation lives under `~/.bin/` — never `~/bin/`, never lines added directly to `~/.bashrc`.
-2. Scaffold with `bx new <name>` (or `--tool`). Only hand-create files if the scaffold doesn't fit.
-3. Modules MUST start with a load guard: `[[ -n "${_BX_MOD_<NAME>_LOADED:-}" ]] && return 0; _BX_MOD_<NAME>_LOADED=1`.
-4. Tools MUST declare `# bx-purpose: <one-liner>` on line 2.
-5. Enable via `bx enable <name>` — never `ln -s` by hand. `enabled/` is the truth.
-6. Never edit `~/.bashrc` directly. `bx install` makes it exactly the bx hook (backing up anything else to `~/.bashrc.pre-bx`); stock-bashrc behaviour lives in `modules/15-shell-options.sh` and the interactive guard in `init.sh`.
-7. Don't add features beyond what was asked. No speculative modules.
-8. Run `bx selftest` before committing.
-9. Preserve load order with NN- prefixes (table below). 10-unit gaps let you wedge in.
-10. No comments explaining WHAT the code does. Only non-obvious WHY.
-11. **Keep CLAUDE.md ≤ 150 lines.** If your edit pushes it over, trim before stopping.
-12. Update README.md for user-visible changes (new command/folder/tool/plugin, install-flow change, removed capability).
-13. `tools/bootstrap.sh` is the only fresh-machine entrypoint. Any new install-time step goes there as an idempotent phase (check state → skip or act), never as a manual README step.
-14. Nothing OS-, version- or desktop-specific is hard-coded in bootstrap. Package names go in `config/packages/<ID>.list` (or `<ID>-<VERSION_ID>.list`); repos, identity and download sources go in `config/bootstrap.conf`. Bootstrap detects the OS from `/etc/os-release` and exports `BX_OS_*` for the tools it runs (`docs/adr/0004-install-deps-are-config.md`).
+1. Automation lives under `~/.bin/`. Never `~/bin/`, never lines in `~/.bashrc`.
+   `bx install` rewrites `~/.bashrc` to the hook and nothing else. **L9**
+2. The filesystem is truth (`docs/adr/0001`). `enabled/` and `enabled-plugins/`
+   hold only relative symlinks made by `bx enable` / `bx plugin enable`. **L4 L7**
+3. Nothing OS-, release- or desktop-specific is hard-coded in a script. Package
+   names go in `config/packages/<ID>[-<VERSION_ID>].list`; repos, identity and
+   download URLs in `config/bootstrap.conf` (`docs/adr/0004`). **L8**
+4. Every install-time step is an idempotent phase of `tools/bootstrap.sh` that
+   reuses an existing tool. No README step says "then run X by hand". **L6**
+5. Don't add what wasn't asked for. No speculative modules, flags, or tools.
+6. `bx selftest` passes before every commit. The hook runs it for you.
 
-## Architecture
+## Three categories — pick one, never blend
 
-```
-~/.bin/
-├── init.sh             master loader — sourced by ~/.bashrc
-├── bx                  the CLI
-├── lib/                shared helpers — sourced by init.sh
-├── modules/            shell modules — define funcs/aliases/env
-├── enabled/            symlinks → modules/  (filesystem = truth)
-├── tools/              one-shot executables — `bx run <name>`
-├── plugins/            customizations living OUTSIDE ~/.bin/
-├── enabled-plugins/    symlinks → plugins/
-├── completions/        bash completions (auto-sourced)
-├── config/             install-time data read by bootstrap: bootstrap.conf + packages/<ID>[-<VERSION_ID>].list
-├── claude/             config consumed by Claude Code
-└── docs/               notes, references & adr/ (architecture decision records)
-```
+| category | lives in | how it runs | rule |
+|---|---|---|---|
+| **module** | `modules/NN-name.sh` | sourced into every interactive shell | idempotent, silent, no side effects |
+| **tool** | `tools/name.sh` | `bx run name`, or by bootstrap | does one thing, safe to re-run |
+| **plugin** | `plugins/name/…` | symlinked to an external path | source stays here, target declared in header |
 
-**Three categories**
-- **Modules** (`modules/*.sh`) — *sourced* into every interactive bash. Idempotent, no side effects.
-- **Tools** (`tools/*.sh`) — *executed* on demand via `bx run`. Install software, bootstrap state.
-- **Plugins** — *symlinked* into a tool-mandated external path (Argos, etc.). Two forms:
-  - **file**: `plugins/<name>.<kind>.sh`
-  - **directory**: `plugins/<name>/<name>.<kind>.sh` + siblings (`lib.sh`, `postenable.sh`). Entrypoint filename MUST match directory name. `enabled-plugins/<name>` symlinks to the entrypoint, not the directory.
+Runtime state (caches, logs) goes under `~/.cache/<slug>/` or
+`~/.local/state/<slug>/`, never into the tree.
 
-`init.sh` sources `enabled/*.sh` in lexical order. No config file — filesystem is truth (rationale: `docs/adr/0001-filesystem-is-truth.md`). Record load-bearing, hard-to-reverse decisions as new ADRs in `docs/adr/` (sequential `NNNN-slug.md`).
+## Modules
 
-**Init guard is PID-scoped.** `init.sh` uses `_BX_INIT_PID=$BASHPID` (*not* exported) — exported guards leak into child shells and break new terminals. If you add another guard, tie it to `$BASHPID` and leave it unexported.
+- File name `NN-name.sh`, `NN` from the table, lowercase and dashes. **L1**
+- First code line is the guard, slug = name with `-`→`_`: **L2**
+  `[[ -n "${_BX_MOD_<slug>_LOADED:-}" ]] && return 0` then `_BX_MOD_<slug>_LOADED=1`
+- Parses, never sources another module (extract to `lib/` or reorder), never
+  `echo -e` (use `printf`). **L3** Output via `bx_info/ok/warn/err` from `lib/log.sh`.
+- Public names short (`sandbox`, `nah`); internals prefixed `_<slug>_`.
+- Scaffold with `bx new <name>`, enable with `bx enable <name>`.
 
-State exported by init.sh: `BX_VERSION`, `BX_HOME`, `BX_MODULES_LOADED`, `BX_MODULES_FAILED`, `BX_LOADED_AT`.
+| prefix | purpose | | prefix | purpose |
+|---|---|---|---|---|
+| `10-` | env: PATH, exports, shell options | | `50-` | tool integrations (docker, kubectl) |
+| `20-` | aliases | | `60-` | prompt / completions |
+| `30-` | functions | | `70-` | cosmetic / greetings |
+| `40-` | dev tools / cheatsheets | | `80-` | motd — last, reads load state |
 
-## NN- prefix ranges (modules)
+Ten-unit gaps are for wedging; a new range needs an ADR.
 
-| Prefix | Purpose |
-|---|---|
-| `10-` | env (`PATH`, exports, locale) |
-| `20-` | aliases |
-| `30-` | functions |
-| `40-` | dev-tools / cheatsheets |
-| `50-` | tool integrations (docker, kubectl, …) |
-| `60-` | prompt / completions |
-| `70-` | cosmetic / greetings |
-| `80-` | motd (reserved — runs last, reads bx state) |
+## Tools
 
-## Plugin headers (top of entrypoint, all three required)
+- `tools/name.sh`, executable, bash shebang, then exactly: **L5**
+  line 2 `# bx-purpose: <one line>` · line 3 `# bx-tool-kind: installer|runtime|check`
+- `installer` → bootstrap calls it (`tools/name.sh` or `bx run name`). **L6**
+  `runtime` → something else runs it (a keybinding, a menu). `check` → read-only.
+- Idempotent: detect state, skip or act, say which. Print "Nothing to do" when
+  nothing changed; bootstrap reads that. Back up before replacing a user file.
+- Needs root? Use `sudo` per command; never require running the tool as root.
+- Scaffold with `bx new <name> --tool`.
 
-```
-# bx-purpose: <one-liner>
-# bx-plugin-kind: argos
-# bx-plugin-target: ~/.config/argos/mywidget.1s+.sh
-```
+## Plugins
 
-`bx-plugin-target` is the EXACT external path including tool-specific filename quirks (e.g. Argos's `.2s+.sh` refresh-rate suffix). Supported kinds: `argos`. Add a new kind by editing `_bx_plugin_apply` in `~/.bin/bx`, then document here.
+- Entrypoint header (all three): `# bx-purpose:`, `# bx-plugin-kind: <kind>`,
+  `# bx-plugin-target: <exact external path>`. Kinds: `BX_PLUGIN_KINDS` in `bx`. **L7**
+- Directory form: `plugins/<name>/<name>.<kind>.sh` + siblings; optional
+  executable `postenable.sh` (gets `BX_PLUGIN_NAME`, `BX_PLUGIN_DIR`).
+- New kind: add to `BX_PLUGIN_KINDS`, handle it in `_bx_plugin_apply`, document here.
 
-Directory-form entrypoints resolve siblings via `__DIR__=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")`. If `postenable.sh` exists and is executable, `bx plugin enable` runs it with `BX_PLUGIN_NAME` and `BX_PLUGIN_DIR` set.
+## Bootstrap and config
 
-## Conventions
+- One phase per concern, in `tools/bootstrap.sh`: `phase` → check → `skip` /
+  `run …` + `done_` / `failed`. Honour `--dry-run` via `run`. Reuse the tool;
+  parse its output rather than re-deriving its state.
+- Values come from `config/bootstrap.conf` (`KEY=VALUE`, parsed not sourced);
+  precedence flag > `BX_<KEY>` env > file. New key: add to the required list in
+  `load_config` and to **L8**.
+- Package lists: one name per line, `-name` removes, `# comment`. Release file
+  needs its base file. **L8**
+- Changing `init.sh`: keep `_BX_INIT_PID=$BASHPID` unexported and the `*i*)`
+  interactive guard; checks set `BX_FORCE_LOAD=1`. **L9**
 
-- Public function names: short, memorable (`sandbox`, `nah`). Internal helpers: prefix with module slug + `_` (`_docker_clean_volumes`).
-- Output: use `bx_info` / `bx_ok` / `bx_warn` / `bx_err` from `lib/log.sh`. Don't hand-roll ANSI. Don't `echo -e` — use `printf`.
-- Don't source one module from another. Reorder via NN-prefix or extract shared code into `lib/`.
+## Docs
 
-## bx commands
+- README names every tool in its table; keep it minimal. **L10**
+- This file stays ≤ 150 lines. **L10**
+- Load-bearing decisions become `docs/adr/NNNN-slug.md`, sequential, with a
+  `status:` front-matter line. **L10**
 
-Run `bx help` for the full list. Most-used: `bx ls`, `bx enable/disable <name>`, `bx new <name> [--tool]`, `bx reload`, `bx doctor`, `bx selftest`, `bx run <tool>`, `bx plugin <verb>`.
+## Change procedure
 
-## Git workflow
+**Add** — `bx new` (or `bx plugin new`), fill in, `bx enable`, wire into
+bootstrap if it installs something, add the README row, `bx lint`, commit.
+**Update** — keep the header lines and guard intact; if behaviour changes, the
+tool must still skip when already applied; run the affected `tests/` file.
+**Remove** — `bx disable` first, `git rm` the file, drop every reference
+(`grep -rn <name>`), drop the README row, and say in the commit why.
+**Rule change** — write the `L` check in `bx lint` first, add a case to
+`tests/test_lint.sh`, then the line here, then the ADR if it's a decision.
 
-Small focused commits, one logical change each. Lowercase imperative messages (`add bx selftest`, `harden docker-context-switch`). Include `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>` on agent-authored changes. Never push or open PRs without explicit authorization.
+## Enforcement
 
-## Before stopping
+- `bx lint` — static, seconds. `bx selftest` — lint + doctor + load checks.
+- `hooks/pre-commit` — lint + `tests/`; `bx install` activates it.
+  `--no-verify` only with the reason in the commit message.
+- `.github/workflows/ci.yml` — the same on every push, clean Ubuntu, shellcheck on.
+- `tests/test_lint.sh` proves each rule catches what it claims.
 
-- **CLAUDE.md**: could a future agent reproduce the convention I just introduced? If no → update it. If file > 150 lines → trim it.
-- **README.md**: user-visible change (new command/folder/tool/plugin, install-flow change, removed capability)? → update it.
-- Architectural ambiguity (module vs tool vs plugin? new NN- prefix range?) → ask the user.
+## Git
+
+Small commits, lowercase imperative subject (`add bx lint`). Explain the why
+in the body. Agent-authored commits carry `Co-Authored-By`. Never push or open
+a PR without being told to.

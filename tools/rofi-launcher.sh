@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # bx-purpose: launch the rofi app menu (Super-d, bound by rofi-init)
+# bx-tool-kind: runtime
 # WAYLAND_DISPLAY / XDG_RUNTIME_DIR are filled in only when absent, for callers
 # that run outside the session environment. GNOME shortcuts already have them.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"

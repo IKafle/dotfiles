@@ -1,6 +1,9 @@
-# ADR 0004 — install-time dependencies are declarative config
+---
+status: accepted
+date: 2026-09-05
+---
 
-**Status:** accepted · 2026-09-05
+# ADR 0004 — install-time dependencies are declarative config
 
 ## Context
 

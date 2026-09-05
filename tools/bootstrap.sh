@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # bx-purpose: fresh-machine entrypoint — relocate to ~/.bin, wire bashrc, install deps, verify (idempotent)
+# bx-tool-kind: entrypoint
 #
 # Usage:
 #   git clone git@github.com:IKafle/dotfiles.git && bash dotfiles/tools/bootstrap.sh [flags]

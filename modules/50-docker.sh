@@ -1,10 +1,7 @@
-  #!/usr/bin/env bash
   # docker-context-switch.sh
   # ──────────────────────────────────────────────────────────────────────────────
-  # Source this file to get three shell functions for switching between Docker
-  # contexts without friction. Add this to your .bashrc or shell config:
-  #
-  #   . ~/.bin/modules/50-docker.sh
+  # Three shell functions for switching between Docker contexts without
+  # friction. bx module: enabled via `bx enable docker`.
   #
   # Aliases provided:
   #   use-sandbox    switch to Docker Desktop (isolated sandbox for AI agents)
@@ -19,10 +16,6 @@
   # Guard: we use bash arrays, [[ ]], and ${BASH_SOURCE}. Reject other shells
   # with a clear message rather than a cryptic syntax error.
   # (POSIX test, since bashisms below would fail in dash/sh.)
-  if [ -z "${BASH_VERSION:-}" ]; then
-      echo "Error: docker-context-switch.sh requires bash (current shell is not bash)" >&2
-      return 1 2>/dev/null || exit 1
-  fi
 
   [[ -n "${_BX_MOD_docker_LOADED:-}" ]] && return 0
   _BX_MOD_docker_LOADED=1

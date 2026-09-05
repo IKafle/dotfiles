@@ -43,8 +43,9 @@ bx edit <name>        # open in $EDITOR, reload on save
 bx new <name>         # scaffold a module   (--tool for a tool)
 bx run <tool>         # run a tool from tools/
 bx plugin <verb>      # ls / enable / disable / new / doctor
-bx doctor             # health check
-bx selftest           # full regression check
+bx doctor             # health check (runtime)
+bx lint               # contract check (structure) — also runs in the pre-commit hook and CI
+bx selftest           # lint + doctor + load checks
 bx help
 ```
 
@@ -63,7 +64,8 @@ bx help
 ├── completions/       bash completions, auto-sourced
 ├── config/            install-time data read by bootstrap
 ├── claude/            Claude Code status line
-├── tests/             shell tests, run by bootstrap
+├── tests/             shell tests, run by the hook, CI and bootstrap
+├── hooks/             git hooks (pre-commit: lint + tests)
 └── docs/              notes and ADRs
 ```
 
@@ -104,7 +106,8 @@ New terminals show a dashboard: system vitals, the todo card fed by
 adapts to terminal width and reports `bx: N modules loaded`, or a warning
 with `bx doctor` as the next step when something failed.
 
-## For agents
+## Changing things
 
-`CLAUDE.md` is the contract: where things go, naming, load guards, what to
-run before committing. Decisions with a reason are in `docs/adr/`.
+`CLAUDE.md` is the contract, and `bx lint` enforces it: every structural rule
+has a numbered check that runs on demand, in the pre-commit hook `bx install`
+activates, and in CI on every push. Decisions with a reason live in `docs/adr/`.

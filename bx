@@ -24,6 +24,11 @@ BX_ENABLED="$BX_HOME/enabled"
 BX_TOOLS="$BX_HOME/tools"
 BX_PLUGINS="$BX_HOME/plugins"
 BX_ENABLED_PLUGINS="$BX_HOME/enabled-plugins"
+BX_CONFIG="$BX_HOME/config"
+BX_HOOKS="$BX_HOME/hooks"
+# Closed sets checked by `bx lint`. Extend here, then handle the new value where it is consumed.
+BX_PLUGIN_KINDS=(argos)                                 # _bx_plugin_apply
+BX_TOOL_KINDS=(entrypoint installer runtime check)      # tools/*.sh line 3
 
 # shellcheck source=lib/color.sh
 [[ -f "$BX_LIB/color.sh" ]] && . "$BX_LIB/color.sh" || {
@@ -204,9 +209,10 @@ PLUGINS — live OUTSIDE ~/.bin (Argos, etc.)
 SYSTEM
   status           version + load summary + resource counts (default)
   reload           re-source modules in current shell
-  doctor           health check
-  selftest         regression check
-  install          wire into ~/.bashrc
+  doctor           health check (runtime state)
+  lint             static contract checks (CLAUDE.md invariants)
+  selftest         regression check (load + lint + doctor)
+  install          make ~/.bashrc the bx hook, activate git hooks
 
 Names accept short ("docker") or full ("50-docker.sh") form.
 Run `bx help <command>` for examples (e.g. `bx help enable`).
@@ -503,8 +509,8 @@ cmd_new() {
         shift
     done
     if [[ -z "$name" ]]; then bx_err "usage: bx new <name> [--tool]"; return 2; fi
-    if [[ ! "$name" =~ ^[a-z][a-z0-9_-]*$ ]]; then
-        bx_err "name must be lowercase, start with a letter, contain only [a-z0-9_-]"
+    if [[ ! "$name" =~ ^[a-z][a-z0-9-]*$ ]]; then
+        bx_err "name must be lowercase, start with a letter, contain only [a-z0-9-]"
         return 1
     fi
 
@@ -513,7 +519,9 @@ cmd_new() {
         if [[ -e "$path" ]]; then bx_err "$path already exists"; return 1; fi
         cat > "$path" <<TOOL_EOF
 #!/usr/bin/env bash
-# $name — one-shot tool. Run via: bx run $name
+# bx-purpose: TODO one-line description (shown by \`bx tools\`)
+# bx-tool-kind: installer
+# kinds: installer (bootstrap must call it) · runtime (something else runs it) · check (read-only diagnostic)
 set -euo pipefail
 
 main() {
@@ -554,6 +562,150 @@ MOD_EOF
     bx_dim "next:   bx enable $name  &&  bx reload"
 }
 
+# ── Lint: the CLAUDE.md contract as code ─────────────────────────
+# Static, side-effect free, fast. Every rule has an L-number that CLAUDE.md
+# cites; a human or agent that breaks the layout gets told which rule and where.
+cmd_lint() {
+    local fails=0 f name bad=()
+    _lint_ok()   { bx_ok "$1"; }
+    _lint_fail() { bx_err "$1"; fails=$(( fails + 1 )); }
+    _lint_report() { local id=$1 msg=$2; shift 2; if (( $# )); then _lint_fail "$id $msg: $*"; else _lint_ok "$id $msg"; fi; }
+    shopt -s nullglob
+
+    # L1 module file names: NN-name.sh, NN in 10–89, lowercase + dashes.
+    bad=()
+    for f in "$BX_MODULES"/*; do
+        name=${f##*/}
+        [[ -f "$f" && "$name" =~ ^[1-8][0-9]-[a-z][a-z0-9-]*\.sh$ ]] || bad+=("$name")
+    done
+    _lint_report L1 "module names are NN-name.sh (10–89)" "${bad[@]}"
+
+    # L2 load guard: first code line is the guard, slug derived from the file name.
+    bad=()
+    for f in "$BX_MODULES"/*.sh; do
+        name=${f##*/}; name=${name%.sh}; name=${name#[0-9][0-9]-}
+        local slug=${name//-/_} first
+        first=$(grep -vE '^[[:space:]]*(#|$)' "$f" | head -1); first=${first#"${first%%[![:space:]]*}"}
+        [[ "$first" == "[[ -n \"\${_BX_MOD_${slug}_LOADED:-}\" ]] && return 0" ]] || bad+=("${f##*/}")
+    done
+    _lint_report L2 "modules open with their _BX_MOD_<slug>_LOADED guard" "${bad[@]}"
+
+    # L3 modules parse, never source another module, never echo -e.
+    bad=()
+    for f in "$BX_MODULES"/*.sh; do
+        bash -n "$f" 2>/dev/null || bad+=("${f##*/}:syntax")
+        grep -qE '(^|;|&&|\|\|)[[:space:]]*(\.|source)[[:space:]]+[^[:space:]]*modules/' "$f" && bad+=("${f##*/}:sources-a-module")
+        grep -qE '^[^#]*\becho[[:space:]]+-[a-zA-Z]*e' "$f" && bad+=("${f##*/}:echo -e")
+    done
+    _lint_report L3 "modules parse, are self-contained, use printf" "${bad[@]}"
+
+    # L4 enabled/: symlinks only, relative, to an existing module of the same name.
+    bad=()
+    for f in "$BX_ENABLED"/*; do
+        name=${f##*/}
+        if [[ ! -L "$f" ]]; then bad+=("$name:not-a-symlink")
+        elif [[ "$(readlink "$f")" != "../modules/$name" ]]; then bad+=("$name:target=$(readlink "$f")")
+        elif [[ ! -f "$f" ]]; then bad+=("$name:broken"); fi
+    done
+    _lint_report L4 "enabled/ holds only ../modules/<same-name> symlinks" "${bad[@]}"
+
+    # L5 tools: executable bash, bx-purpose on line 2, bx-tool-kind on line 3.
+    bad=()
+    local kinds=" ${BX_TOOL_KINDS[*]} " kind
+    for f in "$BX_TOOLS"/*; do
+        name=${f##*/}
+        [[ "$name" == *.sh ]] || { bad+=("$name:not-.sh"); continue; }
+        [[ -x "$f" ]] || bad+=("$name:not-executable")
+        head -1 "$f" | grep -qE '^#!(/usr/bin/env bash|/bin/bash)$' || bad+=("$name:shebang")
+        sed -n '2p' "$f" | grep -qE '^# bx-purpose: .+' || bad+=("$name:line2-purpose")
+        kind=$(sed -n '3p' "$f" | sed -nE 's/^# bx-tool-kind: ([a-z]+).*/\1/p')
+        [[ -n "$kind" && "$kinds" == *" $kind "* ]] || bad+=("$name:line3-kind")
+        bash -n "$f" 2>/dev/null || bad+=("$name:syntax")
+    done
+    _lint_report L5 "tools are executable bash with purpose + kind headers" "${bad[@]}"
+
+    # L6 every installer tool is wired into bootstrap; nothing else is a manual step.
+    bad=()
+    for f in "$BX_TOOLS"/*.sh; do
+        name=${f##*/}; name=${name%.sh}
+        [[ "$(sed -n '3p' "$f")" == "# bx-tool-kind: installer"* ]] || continue
+        grep -qE "tools/$name\.sh|bx run $name" "$BX_TOOLS/bootstrap.sh" || bad+=("$name")
+    done
+    _lint_report L6 "installer tools are called by bootstrap" "${bad[@]}"
+
+    # L7 plugins: supported kind, enabled-plugins links resolve into plugins/.
+    bad=()
+    local pk=" ${BX_PLUGIN_KINDS[*]} " ent
+    for ent in "$BX_PLUGINS"/*.*.sh "$BX_PLUGINS"/*/; do
+        ent=${ent%/}
+        [[ -d "$ent" ]] && ent="$ent/${ent##*/}.$(ls "$ent" | sed -nE "s/^${ent##*/}\.([a-z]+)\.sh$/\1/p" | head -1).sh"
+        [[ -f "$ent" ]] || { bad+=("${ent##*/}:no-entrypoint"); continue; }
+        kind=$(sed -nE 's/^# bx-plugin-kind: ([a-z]+).*/\1/p' "$ent" | head -1)
+        [[ "$pk" == *" $kind "* ]] || bad+=("${ent##*/}:kind=${kind:-none}")
+    done
+    for f in "$BX_ENABLED_PLUGINS"/*; do
+        [[ -L "$f" && -f "$f" && "$(readlink "$f")" == ../plugins/* ]] || bad+=("${f##*/}:bad-link")
+    done
+    _lint_report L7 "plugins declare a supported kind; enabled-plugins links resolve" "${bad[@]}"
+
+    # L8 config: bootstrap.conf is KEY=VALUE with the required keys; package lists are clean.
+    bad=()
+    local conf="$BX_CONFIG/bootstrap.conf" k
+    if [[ -f "$conf" ]]; then
+        grep -vE '^[[:space:]]*(#|$)' "$conf" | grep -qvE '^[A-Z][A-Z0-9_]*=' && bad+=("bootstrap.conf:malformed-line")
+        for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR CLAUDE_INSTALLER; do
+            grep -qE "^$k=.+" "$conf" || bad+=("bootstrap.conf:missing-$k")
+        done
+    else bad+=("bootstrap.conf:missing"); fi
+    for f in "$BX_CONFIG"/packages/*.list; do
+        name=${f##*/}
+        grep -vE '^[[:space:]]*(#|$)' "$f" | grep -qvE '^-?[a-z0-9][a-z0-9.+-]*$' && bad+=("$name:bad-package-name")
+        if [[ "$name" =~ ^([a-z]+)-[0-9][0-9.]*\.list$ ]]; then
+            [[ -f "$BX_CONFIG/packages/${BASH_REMATCH[1]}.list" ]] || bad+=("$name:no-base-list")
+        fi
+    done
+    _lint_report L8 "config is well-formed" "${bad[@]}"
+
+    # L9 init.sh keeps its two guards: PID-scoped (unexported) and interactive.
+    bad=()
+    grep -qE '^_BX_INIT_PID=\$BASHPID' "$BX_HOME/init.sh" || bad+=("pid-guard")
+    grep -qE 'export[^#]*_BX_INIT_PID' "$BX_HOME/init.sh" && bad+=("pid-guard-exported")
+    grep -qE '^\s*\*i\*\)' "$BX_HOME/init.sh" || bad+=("interactive-guard")
+    _lint_report L9 "init.sh guards intact" "${bad[@]}"
+
+    # L10 docs: CLAUDE.md ≤ 150 lines, README names every tool, ADRs sequential with status.
+    bad=()
+    (( $(wc -l < "$BX_HOME/CLAUDE.md") <= 150 )) || bad+=("CLAUDE.md>150-lines")
+    for f in "$BX_TOOLS"/*.sh; do name=${f##*/}; name=${name%.sh}; grep -qF "\`$name\`" "$BX_HOME/README.md" || bad+=("README-missing-$name"); done
+    local n=0
+    for f in "$BX_HOME"/docs/adr/*.md; do
+        n=$(( n + 1 )); name=${f##*/}
+        [[ "$name" =~ ^0*${n}-[a-z0-9-]+\.md$ ]] || bad+=("adr:$name:expected-$(printf '%04d' "$n")")
+        head -5 "$f" | grep -qE '^status: ' || bad+=("adr:$name:no-status")
+    done
+    _lint_report L10 "docs: CLAUDE.md size, README tool table, ADR sequence" "${bad[@]}"
+
+    # L11 tests and hooks parse.
+    bad=()
+    for f in "$BX_HOME"/tests/*.sh "$BX_HOOKS"/*; do bash -n "$f" 2>/dev/null || bad+=("${f##*/}"); done
+    _lint_report L11 "tests and hooks parse" "${bad[@]}"
+
+    # L12 shellcheck at error severity, when available.
+    if command -v shellcheck >/dev/null; then
+        local out
+        out=$(shellcheck -S error -s bash -f gcc "$BX_HOME/bx" "$BX_HOME/init.sh" "$BX_LIB"/*.sh "$BX_MODULES"/*.sh \
+              "$BX_TOOLS"/*.sh "$BX_PLUGINS"/*/*.sh "$BX_PLUGINS"/*/*/*.sh "$BX_HOME"/tests/*.sh "$BX_HOOKS"/* 2>/dev/null | cut -d: -f1,2 | sort -u | tr '\n' ' ')
+        _lint_report L12 "shellcheck (errors)" ${out:+"$out"}
+    else
+        bx_warn "L12 shellcheck not installed — skipped (bootstrap's apt phase installs it)"
+    fi
+
+    shopt -u nullglob
+    unset -f _lint_ok _lint_fail _lint_report
+    if (( fails )); then bx_err "lint: $fails rule(s) violated — see CLAUDE.md"; return 1; fi
+    bx_ok "lint: contract holds"
+}
+
 cmd_doctor() {
     local issues=0
 
@@ -569,6 +721,13 @@ cmd_doctor() {
     fi
 
     # 2. ~/.bashrc hook — accept both tilde-form and expanded path
+    if [[ -d "$BX_HOME/.git" ]]; then
+        if [[ "$(git -C "$BX_HOME" config core.hooksPath 2>/dev/null)" == hooks ]]; then
+            bx_ok "git hooks active (core.hooksPath=hooks)"
+        else
+            bx_warn "git hooks not active — run \`bx install\` (sets core.hooksPath=hooks)"
+        fi
+    fi
     if _bx_bashrc_hooked; then
         bx_ok "~/.bashrc sources init.sh"
     else
@@ -726,6 +885,13 @@ cmd_selftest() {
         _bx_st_fail "directory plugins missing <name>.<kind>.sh entrypoint: ${malformed_dirs[*]}"
     fi
 
+    # 5c. Static contract (delegated to bx lint).
+    if cmd_lint >/dev/null 2>&1; then
+        _bx_st_ok "bx lint passes"
+    else
+        _bx_st_fail "bx lint reports violations — run \`bx lint\` for detail"
+    fi
+
     # 6. bx doctor (delegated — covers bashrc hook, PATH, broken symlinks, etc.)
     if cmd_doctor >/dev/null 2>&1; then
         _bx_st_ok "bx doctor passes"
@@ -785,8 +951,18 @@ _bx_bashrc_canonical() {
     printf '# ~/.bashrc — everything lives in ~/.bin (bx). Do not edit; run `bx edit <module>`.\n. ~/.bin/init.sh\n'
 }
 
+_bx_install_hooks() {
+    [[ -d "$BX_HOME/.git" && -d "$BX_HOOKS" ]] || return 0
+    if [[ "$(git -C "$BX_HOME" config core.hooksPath 2>/dev/null)" == hooks ]]; then
+        bx_dim "git hooks already active"
+    else
+        git -C "$BX_HOME" config core.hooksPath hooks && bx_ok "git hooks active: $BX_HOOKS/pre-commit runs bx lint + tests"
+    fi
+}
+
 cmd_install() {
     local rc="$HOME/.bashrc"
+    _bx_install_hooks
     if [[ -f "$rc" ]] && cmp -s "$rc" <(_bx_bashrc_canonical); then
         bx_dim "~/.bashrc already canonical — nothing to do"
         return 0
@@ -1100,6 +1276,7 @@ case $cmd in
     read|cat|show)         cmd_read "$@" ;;
     new)                   cmd_new "$@" ;;
     doctor|check|health)   cmd_doctor "$@" ;;
+    lint)                  cmd_lint "$@" ;;
     selftest|test)         cmd_selftest "$@" ;;
     run|exec)              cmd_run "$@" ;;
     tools)                 cmd_tools "$@" ;;

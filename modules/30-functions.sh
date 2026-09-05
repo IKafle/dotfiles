@@ -334,11 +334,11 @@ function build()
 ###### Search commandlinefu.com from the command line
 # using the API
 # Usage: cmdfu hello world
-function cmdfu() { curl "http://www.commandlinefu.com/commands/matching/$@/$(echo -n $@ | openssl base64)/plaintext" --silent | sed "s/\(^#.*\)/\x1b[32m\1\x1b[0m/g" | less -R ; }
+function cmdfu() { curl "http://www.commandlinefu.com/commands/matching/$*/$(printf '%s' "$*" | openssl base64)/plaintext" --silent | sed "s/\(^#.*\)/\x1b[32m\1\x1b[0m/g" | less -R ; }
 
 
 
- function cmdfu() { curl "http://www.commandlinefu.com/commands/matching/$@/$(echo -n $@ | openssl base64)/plaintext"; }
+ function cmdfu() { curl "http://www.commandlinefu.com/commands/matching/$*/$(printf '%s' "$*" | openssl base64)/plaintext"; }
 
 
 
@@ -422,11 +422,11 @@ case $col in
  'gray'   ) a='[1;37m' ;;
 esac
 # Display text in designated color, no newline
-echo -en "\033$a$text"
+printf '%b' "\033$a$text"
 # If 'b' switch not on, restore color to black
-if [ -n $b ]
+if [ -n "$b" ]
  then
-  echo -en "\033$b"
+  printf '%b' "\033$b"
 fi
 # If 'n' switch on, do not display final newline
 # otherwise output newline
@@ -440,7 +440,7 @@ echo $o
 
 function colors2nums()
 {
-for code in {0..255}; do echo -e "\e[38;05;${code}m $code: Test"; done
+for code in {0..255}; do printf '%b\n' "\e[38;05;${code}m $code: Test"; done
 }
 
 
@@ -505,8 +505,8 @@ function count_files()
 			echo $(($(ls --color=no -1 -l . | grep -v ^d | wc -l)-1))
 		;;
 		*)
-			echo -e "\n${ewhite}Usage:"
-			echo -e "\n${eorange}count_files${ewhite} | ${egreen}+h ${eiceblue}[count files and folders - include hidden ones] \
+			printf '%b\n' "\n${ewhite}Usage:"
+			printf '%b\n' "\n${eorange}count_files${ewhite} | ${egreen}+h ${eiceblue}[count files and folders - include hidden ones] \
 			\n${eorange}count_files${ewhite} | ${egreen}-h ${eiceblue}[count files and folders - exclude hidden ones] \
 			\n${eorange}count_files${ewhite} | ${egreen}+d ${eiceblue}[count folders - include hidden ones] \
 			\n${eorange}count_files${ewhite} | ${egreen}-d ${eiceblue}[count folders - exclude hidden ones] \
@@ -527,8 +527,8 @@ function count_processes()
 {
 	case $1 in
 		*help )
-			echo -e "\n${ewhite}Usage:"
-			echo -e "\n${eorange}count_processes${ewhite} | ${egreen}! no options !\n"
+			printf '%b\n' "\n${ewhite}Usage:"
+			printf '%b\n' "\n${eorange}count_processes${ewhite} | ${egreen}! no options !\n"
 			tput sgr0
 		;;
 		* )
@@ -638,7 +638,7 @@ curl -s http://geoiplookup.wikimedia.org/|awk -F, '{print $3,$4}'|awk -F'"' '{pr
 #                   Google search (example: google dog)                               #
 #######################################################################################
 function google() {
-firefox "http://www.google.com/search?&num=100&q=${@}" &
+firefox "http://www.google.com/search?&num=100&q=$*" &
 }
 
 
@@ -661,14 +661,14 @@ function deadlib() { lsof | grep 'DEL.*lib' | cut -f 1 -d ' ' | sort -u; }
 # took time					 #
 ##################################################
 
-function debug_http() { /usr/bin/curl $@ -o /dev/null -w "dns: %{time_namelookup} connect: %{time_connect} pretransfer: %{time_pretransfer} starttransfer: %{time_starttransfer} total: %{time_total}\n" ; }
+function debug_http() { /usr/bin/curl "$@" -o /dev/null -w "dns: %{time_namelookup} connect: %{time_connect} pretransfer: %{time_pretransfer} starttransfer: %{time_starttransfer} total: %{time_total}\n" ; }
 
 
  # Lookup a word with dict.org			 #
 ##################################################
 
 #define "whatever"
-function dic() { curl dict://dict.org/d:"$@" ; }
+function dic() { curl dict://dict.org/d:"$*" ; }
 
 
 
@@ -699,14 +699,14 @@ function downforme() {
 	NC='\e[0m'
 	if [ $# = 0 ]
 	then
-		echo -e "${YELLOW}usage:${NC} downforme website_url"
+		printf '%b\n' "${YELLOW}usage:${NC} downforme website_url"
 	else
 		JUSTYOUARRAY=(`lynx -dump http://downforeveryoneorjustme.com/$1 | grep -o "It's just you"`)
 		if [ ${#JUSTYOUARRAY} != 0 ]
 		then
-			echo -e "${RED}It's just you. \n${NC}$1 is up."
+			printf '%b\n' "${RED}It's just you. \n${NC}$1 is up."
 		else
-			echo -e "${GREEN}It's not just you! \n${NC}$1 looks down from here."
+			printf '%b\n' "${GREEN}It's not just you! \n${NC}$1 looks down from here."
 		fi
 	fi
 }
@@ -801,19 +801,19 @@ function human_filesize() { awk -v sum="$1" ' BEGIN {hum[1024^3]="Gb"; hum[1024^
 ###### machine details
 function ii()
 {
-    echo -e "\n${RED}You are logged onto:$NC " ; hostname
-    echo -e "\n${RED}Additionnal information:$NC " ; uname -a
-    echo -e "\n${RED}Users logged on:$NC " ; w -h
-    echo -e "\n${RED}Current date:$NC " ; date
-    echo -e "\n${RED}Machine stat:$NC " ; uptime
-    echo -e "\n${RED}Disk space:$NC " ; df -h
-    echo -e "\n${RED}Memory stats (in MB):$NC " ;
+    printf '%b\n' "\n${RED}You are logged onto:$NC " ; hostname
+    printf '%b\n' "\n${RED}Additionnal information:$NC " ; uname -a
+    printf '%b\n' "\n${RED}Users logged on:$NC " ; w -h
+    printf '%b\n' "\n${RED}Current date:$NC " ; date
+    printf '%b\n' "\n${RED}Machine stat:$NC " ; uptime
+    printf '%b\n' "\n${RED}Disk space:$NC " ; df -h
+    printf '%b\n' "\n${RED}Memory stats (in MB):$NC " ;
     if [ "$OS" = "Linux" ]; then
         free -m
     elif [ "$OS" = "Darwin" ]; then
         vm_stat
     fi
-    echo -e "\n${RED}IPs:$NC " ; ips
+    printf '%b\n' "\n${RED}IPs:$NC " ; ips
 }
 
 
@@ -825,32 +825,32 @@ function ii()
 {
 	case $1 in
 		*cpu)
-			echo -e "${ewhite}CPU:\n"
-			echo -e "${eorange}Model:${eiceblue} $(grep "model name" /proc/cpuinfo | sed -e 's/.*: //g')"
-			echo -e "${eorange}MHz  :${eiceblue} $(grep "cpu MHz" /proc/cpuinfo | sed -e 's/.*: //g')\n"
+			printf '%b\n' "${ewhite}CPU:\n"
+			printf '%b\n' "${eorange}Model:${eiceblue} $(grep "model name" /proc/cpuinfo | sed -e 's/.*: //g')"
+			printf '%b\n' "${eorange}MHz  :${eiceblue} $(grep "cpu MHz" /proc/cpuinfo | sed -e 's/.*: //g')\n"
 		;;
 		*kernel)
-			echo -e "${ewhite}Kernel:\n"
-			echo -e "${eorange}Release:${eiceblue} $(uname -r)"
-			echo -e "${eorange}Version:${eiceblue} $(uname -v)"
-			echo -e "${eorange}Machine:${eiceblue} $(uname -m)\n"
+			printf '%b\n' "${ewhite}Kernel:\n"
+			printf '%b\n' "${eorange}Release:${eiceblue} $(uname -r)"
+			printf '%b\n' "${eorange}Version:${eiceblue} $(uname -v)"
+			printf '%b\n' "${eorange}Machine:${eiceblue} $(uname -m)\n"
 		;;
 		*mem | *ram)
-			echo -e "${ewhite}RAM:\n"
-			echo -e "${eorange}Total:${eiceblue} $(((`showmem --free`) + (`showmem --used`))) MB"
-			echo -e "${eorange}Free :${eiceblue} $(showmem --free) MB"
-			echo -e "${eorange}Used :${eiceblue} $(showmem --used) MB\n"
+			printf '%b\n' "${ewhite}RAM:\n"
+			printf '%b\n' "${eorange}Total:${eiceblue} $(((`showmem --free`) + (`showmem --used`))) MB"
+			printf '%b\n' "${eorange}Free :${eiceblue} $(showmem --free) MB"
+			printf '%b\n' "${eorange}Used :${eiceblue} $(showmem --used) MB\n"
 		;;
 		*partitions)
-			echo -e "${ewhite}Partitions:${eorange}\n"
-			echo -e "major minor blocks device-node ${eiceblue}\
+			printf '%b\n' "${ewhite}Partitions:${eorange}\n"
+			printf '%b\n' "major minor blocks device-node ${eiceblue}\
 			\n$(cat /proc/partitions | sed -e '1,2d')" | column -t
 			echo ""
 		;;
 		*pci)
 			check_opt lspci systeminfos::pci
 			if [[ $? != "1" ]]; then
-				echo -e "${ewhite}PCI Devices:\n${eiceblue}"
+				printf '%b\n' "${ewhite}PCI Devices:\n${eiceblue}"
 				lspci -vkmm
 				echo ""
 			fi
@@ -858,20 +858,20 @@ function ii()
 		*usb)
 			check_opt lsusb systeminfos::usb
 			if [[ $? != "1" ]]; then
-				echo -e "${ewhite}USB Devices:\n${eiceblue}"
+				printf '%b\n' "${ewhite}USB Devices:\n${eiceblue}"
 				lsusb -v
 				echo ""
 			fi
 		;;
 		*mounts)
-			echo -e "${ewhite}Mounts:\n${eorange}\
+			printf '%b\n' "${ewhite}Mounts:\n${eorange}\
 			\ndevice-node on mount-point type filesystem options\n" ${eiceblue} "\n\n$(mount)" | column -t
 			echo ""
 		;;
 		*bios)
 			check_opt dmidecode systeminfos::bios
 			if [[ $? != "1" && $EUID == 0 ]]; then
-				echo -e "${ewhite}SMBIOS/DMI Infos:${eiceblue}\n"
+				printf '%b\n' "${ewhite}SMBIOS/DMI Infos:${eiceblue}\n"
 				dmidecode -q
 			fi
 		;;
@@ -886,8 +886,8 @@ function ii()
 			# system_infos_bios
 		;;
 		*)
-			echo -e "\n${ewhite}Usage:\n"
-			echo -e "${eorange}system_infos ${ewhite}|${egreen} --cpu\t\t${eiceblue}[Display CPU Model and Freq]\
+			printf '%b\n' "\n${ewhite}Usage:\n"
+			printf '%b\n' "${eorange}system_infos ${ewhite}|${egreen} --cpu\t\t${eiceblue}[Display CPU Model and Freq]\
 			\n${eorange}system_infos ${ewhite}|${egreen} --kernel\t${eiceblue} 	[Display Kernel Version, Release and Machine]\
 			\n${eorange}system_infos ${ewhite}|${egreen} --memory\t${eiceblue} 	[Display Total, Free and Used RAM]\
 			\n${eorange}system_infos ${ewhite}|${egreen} --partitions\t${eiceblue}[Display Major, Minor, Blocks and Node for all Paritions]\
@@ -984,7 +984,7 @@ function mtube() {
 
 
 
-alias mtube_='mplayer -fs $(echo "http://youtube.com/get_video.php?$(curl -s "$1" | sed -n "/watch_fullscreen/s;.*\(video_id.\+\)&title.*;\1;p")")'
+mtube_() { mplayer -fs "http://youtube.com/get_video.php?$(curl -s "$1" | sed -n "/watch_fullscreen/s;.*\(video_id.\+\)&title.*;\1;p")"; }
 
 
  
@@ -1033,7 +1033,7 @@ read -sn 1 -p "10/10. To get rid of this damn script at startup because you are 
 
 function piratebay()
 {
-lynx -dump http://thepiratebay.org/search/$@|awk '/TPB.torrent$/ {print $2}'
+lynx -dump "http://thepiratebay.org/search/$*"|awk '/TPB.torrent$/ {print $2}'
 }
 
 
@@ -1041,7 +1041,7 @@ lynx -dump http://thepiratebay.org/search/$@|awk '/TPB.torrent$/ {print $2}'
 ##################################################
 
 ###### usage:	pronounce "word1" "word2" "word3" "..."
-function pronounce() { for a in $@; do wget -qO- $(wget -qO- "http://www.m-w.com/dictionary/$a" | grep 'return au' | sed -r "s|.*return au\('([^']*)', '([^'])[^']*'\).*|http://cougar.eb.com/soundc11/\2/\1|") | aplay -q; done }
+function pronounce() { for a in "$@"; do wget -qO- $(wget -qO- "http://www.m-w.com/dictionary/$a" | grep 'return au' | sed -r "s|.*return au\('([^']*)', '([^'])[^']*'\).*|http://cougar.eb.com/soundc11/\2/\1|") | aplay -q; done }
 
 
   #   Reminder for whatever whenever		 #
@@ -1094,7 +1094,7 @@ while true; do
     DIFF=$(($NOW - $BEGIN))
     MINS=$(($DIFF / 60))
     SECS=$(($DIFF % 60))
-    echo -ne "Time elapsed: $MINS:`printf %02d $SECS`\r"
+    printf '%b' "Time elapsed: $MINS:`printf %02d $SECS`\r"
     sleep .1
 done
 }
@@ -1110,7 +1110,7 @@ START=$( date +%s ); while true; do CURRENT=$( date +%s ) ; echo $(( CURRENT-STA
 
 
 ###### countdown clock
-function countdown() { case "$1" in -s) shift;; *) set $(($1 * 60));; esac; local S=" "; for i in $(seq "$1" -1 1); do echo -ne "$S\r $i\r"; sleep 1; done; echo -e "$S\rBOOM!"; }
+function countdown() { case "$1" in -s) shift;; *) set $(($1 * 60));; esac; local S=" "; for i in $(seq "$1" -1 1); do printf '%b' "$S\r $i\r"; sleep 1; done; printf '%b\n' "$S\rBOOM!"; }
 
 
 
@@ -1118,7 +1118,7 @@ function countdown() { case "$1" in -s) shift;; *) set $(($1 * 60));; esac; loca
 ##################################################
 
 function terminal_title {
-    echo -en "\033]2;$@\007"
+    printf '\033]2;%s\007' "$*"
 }
 
 
@@ -1156,7 +1156,7 @@ xinput set-prop $touchpad "Device Enabled" 1
 ##################################################
 
 function tvcom() {
-firefox "http://www.tv.com/search.php?type=11&stype=all&tag=search%3Bfrontdoor&qs="${@}"&stype=program" &
+firefox "http://www.tv.com/search.php?type=11&stype=all&tag=search%3Bfrontdoor&qs=$*&stype=program" &
 }
 
 
@@ -1189,7 +1189,7 @@ lynx -dump $1 | grep -A999 "^References$" | tail -n +3 | awk '{print $2 }'
 ##################################################
 
 ###### usage: wgetall mp3 http://example.com/download/
-function wgetall() { wget -r -l2 -nd -Nc -A.$@ $@ ; }
+function wgetall() { wget -r -l2 -nd -Nc -A".$1" "${@:2}" ; }
 
 
 

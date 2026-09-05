@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # bx-purpose: audit host for geekbar dependencies (hard, soft, system)
+# bx-tool-kind: check
 set -euo pipefail
 
 # Pull in the color palette so the doctor matches the rest of bx's

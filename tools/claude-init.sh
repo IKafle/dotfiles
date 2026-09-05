@@ -1,5 +1,6 @@
 #!/bin/bash
 # bx-purpose: wire Claude Code's status line to ~/.bin/claude/statusline.py (idempotent)
+# bx-tool-kind: installer
 #
 # claude-init.sh
 # ─────────────────────────────────────────────────────────────────────────────

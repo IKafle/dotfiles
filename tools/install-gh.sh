@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # bx-purpose: install GitHub CLI (gh) from the official apt repo (idempotent)
+# bx-tool-kind: installer
 set -euo pipefail
 
 KEYRING=/etc/apt/keyrings/githubcli-archive-keyring.gpg

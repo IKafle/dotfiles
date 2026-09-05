@@ -44,3 +44,6 @@ cowsay
 
 # launcher
 rofi
+
+# contract checks
+shellcheck

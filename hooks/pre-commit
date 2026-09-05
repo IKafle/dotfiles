@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# bx pre-commit: the contract must hold before anything lands. Activated by
+# `bx install` (git config core.hooksPath hooks). Bypass only with a reason:
+# git commit --no-verify
+set -uo pipefail
+BX_HOME=$(git rev-parse --show-toplevel)
+export BX_HOME
+fail=0
+printf '\n── pre-commit: bx lint ──\n' >&2
+"$BX_HOME/bx" lint || fail=1
+printf '\n── pre-commit: tests ──\n' >&2
+for t in "$BX_HOME"/tests/test_*.sh; do
+    if ! out=$(bash "$t" 2>&1); then printf '%s\n' "$out" | tail -15 >&2; fail=1; fi
+done
+if (( fail )); then
+    printf '\n\033[31m✘ commit blocked — fix the violations above (see CLAUDE.md)\033[0m\n' >&2
+    exit 1
+fi
+printf '\033[32m✔ pre-commit: contract holds, tests pass\033[0m\n' >&2

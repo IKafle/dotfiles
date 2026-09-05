@@ -1,5 +1,6 @@
 #!/bin/bash
 # bx-purpose: bootstrap ~/vault workspace folder structure
+# bx-tool-kind: installer
 #
 # vault-init.sh
 # ─────────────────────────────────────────────────────────────────────────────
