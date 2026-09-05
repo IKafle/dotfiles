@@ -20,6 +20,15 @@ if [[ -x /usr/bin/dircolors ]]; then
     if [[ -r ~/.dircolors ]]; then eval "$(dircolors -b ~/.dircolors)"; else eval "$(dircolors -b)"; fi
 fi
 
+# ── Readline: Tab completion ─────────────────────────────────
+# ignore-case: `cd doc<Tab>` finds Documents. map-case: `-` and `_` match each
+# other too. Kept here rather than ~/.inputrc so the tree stays the truth.
+# `bind` only makes sense with line editing, i.e. an interactive shell.
+if [[ $- == *i* ]]; then
+    bind 'set completion-ignore-case on'
+    bind 'set completion-map-case on'
+fi
+
 # ── Programmable completion ──────────────────────────────────
 if ! shopt -oq posix; then
     if [[ -f /usr/share/bash-completion/bash_completion ]]; then
