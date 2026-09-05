@@ -107,8 +107,9 @@ tool must still skip when already applied; run the affected `tests/` file.
 - `bx lint` — static, seconds. `bx selftest` — lint + doctor + load checks.
 - `hooks/pre-commit` — lint + `tests/` + modules load + bootstrap dry-run;
   `bx install` activates it. `--no-verify` only with the reason in the commit message.
-- `hooks/pre-push` — `bootstrap-smoke`: HEAD bootstraps a fresh Ubuntu container.
-  Minutes, needs docker. No CI (`docs/adr/0006`).
+- `bx run bootstrap-smoke` — HEAD bootstraps a fresh Ubuntu container; minutes,
+  needs docker; stamps `.git/bx-smoked`. `hooks/pre-push` only reports whether
+  HEAD carries the stamp — instant, never blocks. No CI (`docs/adr/0006`).
 - `tests/test_lint.sh` proves each rule catches what it claims.
 
 ## Git

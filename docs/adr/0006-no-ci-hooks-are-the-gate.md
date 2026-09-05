@@ -21,13 +21,18 @@ activated by `bx install` (`core.hooksPath=hooks`):
 
 - `hooks/pre-commit` — `bx lint`, `tests/`, every enabled module loads,
   `bootstrap --dry-run`. Under a minute.
-- `hooks/pre-push` — `bootstrap-smoke`: clone HEAD into a fresh
+- `bx run bootstrap-smoke` — on demand: clone HEAD into a fresh
   `SMOKE_IMAGE` container and run the full bootstrap. Minutes; needs docker.
+  A green run stamps HEAD in `.git/bx-smoked`.
+- `hooks/pre-push` — instant and advisory: says whether HEAD carries that
+  stamp. It never blocks; a push must not wait on a ten-minute container.
 
 ## Consequences
 
-- Nothing runs anywhere but this machine. `--no-verify` on commit or push
-  is the only way around the gate; the reason goes in the commit message.
-- The smoke tests HEAD, not the working tree — commit, then push.
+- Nothing runs anywhere but this machine. `--no-verify` on commit is the
+  only way around the gate; the reason goes in the commit message.
+- The smoke tests HEAD, not the working tree — commit, then smoke. Run it
+  before pushing anything that touches `tools/bootstrap*.sh`, `config/` or
+  `init.sh`; the pre-push notice is the reminder.
 - If a second machine or contributor ever appears, revisit: the hooks are
   tracked, so re-adding a workflow is one file.

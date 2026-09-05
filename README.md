@@ -65,7 +65,7 @@ bx help
 ├── config/            install-time data read by bootstrap
 ├── claude/            Claude Code status line
 ├── tests/             shell tests, run by the pre-commit hook and bootstrap
-├── hooks/             git hooks (pre-commit: lint, tests, load, dry-run; pre-push: bootstrap-smoke)
+├── hooks/             git hooks (pre-commit: lint, tests, load, dry-run; pre-push: is HEAD smoked?)
 └── docs/              notes and ADRs
 ```
 
@@ -111,5 +111,6 @@ with `bx doctor` as the next step when something failed.
 
 `CLAUDE.md` is the contract, and `bx lint` enforces it: every structural rule
 has a numbered check that runs on demand and in the pre-commit hook `bx install`
-activates. `hooks/pre-push` bootstraps HEAD in a fresh container; there is no
-CI (`docs/adr/0006`). Decisions with a reason live in `docs/adr/`.
+activates. `bx run bootstrap-smoke` bootstraps HEAD in a fresh container and
+`hooks/pre-push` reports whether HEAD has passed it; there is no CI
+(`docs/adr/0006`). Decisions with a reason live in `docs/adr/`.

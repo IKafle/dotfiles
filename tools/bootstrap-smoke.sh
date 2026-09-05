@@ -10,7 +10,8 @@
 # prints the summary.
 # Image comes from SMOKE_IMAGE in config/bootstrap.conf (or BX_SMOKE_IMAGE).
 # The container gets a `git clone` of this tree, i.e. HEAD — commit first;
-# uncommitted edits are not exercised.
+# uncommitted edits are not exercised. A green run records HEAD in
+# .git/bx-smoked; hooks/pre-push reads it to say whether HEAD is proven.
 #
 # Usage: bx run bootstrap-smoke [--keep]      (--keep: leave the container for inspection)
 set -uo pipefail
@@ -53,6 +54,8 @@ printf '── bootstrap-smoke: %s ──\n' "$IMAGE" >&2
     '
 rc=$?
 (( KEEP )) && printf 'container kept: %s  (docker exec -it %s bash)\n' "$name" "$name" >&2
-if (( rc == 0 )); then printf '✔ fresh %s bootstraps clean\n' "$IMAGE" >&2
+if (( rc == 0 )); then
+    git -C "$BX_HOME" rev-parse HEAD > "$(git -C "$BX_HOME" rev-parse --git-dir)/bx-smoked" 2>/dev/null || true
+    printf '✔ fresh %s bootstraps clean\n' "$IMAGE" >&2
 else printf '✘ bootstrap failed inside %s (exit %d)\n' "$IMAGE" "$rc" >&2; fi
 exit $rc

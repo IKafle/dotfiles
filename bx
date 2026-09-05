@@ -956,7 +956,7 @@ _bx_install_hooks() {
     if [[ "$(git -C "$BX_HOME" config core.hooksPath 2>/dev/null)" == hooks ]]; then
         bx_dim "git hooks already active"
     else
-        git -C "$BX_HOME" config core.hooksPath hooks && bx_ok "git hooks active: pre-commit (lint, tests, load, dry-run) + pre-push (bootstrap-smoke)"
+        git -C "$BX_HOME" config core.hooksPath hooks && bx_ok "git hooks active: pre-commit (lint, tests, load, dry-run) + pre-push (smoke notice)"
     fi
 }
 
