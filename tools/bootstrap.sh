@@ -33,6 +33,9 @@ TODO_REPO="${BX_TODO_REPO:-git@github.com:IKafle/todo.git}"
 GIT_NAME="${BX_GIT_NAME:-ishwor kafle}"
 GIT_EMAIL="${BX_GIT_EMAIL:-hello.ishworkafle@gmail.com}"
 ARGOS_UUID="argos@pew.worldwidemann.com"
+# extensions.gnome.org still serves the 2019 Argos release (GNOME 3.32 only);
+# upstream master declares GNOME 45+, so install from the repo tarball.
+ARGOS_TARBALL="https://codeload.github.com/p-e-w/argos/tar.gz/master"
 
 # Every external command the modules, plugins and tools call, mapped to its
 # Ubuntu package. Cloud CLIs (aws/gcloud/az/kubectl) and language version
@@ -218,10 +221,20 @@ git_identity() {
 }
 
 # ── Phase 3: apt packages ───────────────────────────────────────
+# One password for the whole run: after the first prompt, refresh the sudo
+# timestamp in the background until bootstrap exits.
+_SUDO_KEEPALIVE=""
 need_sudo() {
-    sudo -n true 2>/dev/null && return 0
-    bx_info "sudo needed for: $1"
-    sudo -v
+    if ! sudo -n true 2>/dev/null; then
+        bx_info "sudo needed for: $1"
+        sudo -v || return 1
+    fi
+    if [[ -z "$_SUDO_KEEPALIVE" ]]; then
+        ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 50; done ) &
+        _SUDO_KEEPALIVE=$!
+        trap '[[ -n "$_SUDO_KEEPALIVE" ]] && kill "$_SUDO_KEEPALIVE" 2>/dev/null' EXIT
+    fi
+    return 0
 }
 
 apt_packages() {
@@ -340,23 +353,32 @@ docker_engine() {
 }
 
 # ── Phase 6: geekbar ────────────────────────────────────────────
+# The running shell only lists an extension after the next login, so also
+# accept it being on disk — otherwise every re-run before logout reinstalls.
 argos_installed() {
-    command -v gnome-extensions >/dev/null && gnome-extensions list 2>/dev/null | grep -qx "$ARGOS_UUID"
+    gnome-extensions list 2>/dev/null | grep -qx "$ARGOS_UUID" \
+        || [[ -f "$HOME/.local/share/gnome-shell/extensions/$ARGOS_UUID/metadata.json" ]]
 }
 
 install_argos() {
-    local shell_ver info url zip
+    local shell_ver tmp zip
     shell_ver=$(gnome-shell --version 2>/dev/null | awk '{print $3}' | cut -d. -f1)
     [[ -n "$shell_ver" ]] || { failed "gnome-shell version undetectable"; return 1; }
-    info=$(curl -fsSL "https://extensions.gnome.org/extension-info/?uuid=$ARGOS_UUID&shell_version=$shell_ver") \
-        || { failed "extensions.gnome.org lookup for GNOME $shell_ver"; return 1; }
-    url=$(printf '%s' "$info" | jq -r '.download_url // empty')
-    [[ -n "$url" ]] || { failed "Argos has no build for GNOME Shell $shell_ver — install it manually"; return 1; }
-    zip=$(mktemp --suffix=.zip)
-    curl -fsSL "https://extensions.gnome.org$url" -o "$zip" || { failed "download Argos"; rm -f "$zip"; return 1; }
-    gnome-extensions install --force "$zip" >/dev/null && rm -f "$zip" || { failed "gnome-extensions install"; rm -f "$zip"; return 1; }
+    tmp=$(mktemp -d)
+    if ! curl -fsSL "$ARGOS_TARBALL" | tar -xz -C "$tmp" 2>/dev/null; then
+        failed "download Argos from github.com/p-e-w/argos"; rm -rf "$tmp"; return 1
+    fi
+    if ! grep -q "\"$shell_ver\"" "$tmp"/argos-master/"$ARGOS_UUID"/metadata.json 2>/dev/null; then
+        failed "Argos master does not declare GNOME Shell $shell_ver — check github.com/p-e-w/argos"; rm -rf "$tmp"; return 1
+    fi
+    zip="$tmp/argos.zip"
+    ( cd "$tmp/argos-master/$ARGOS_UUID" && zip -qr "$zip" . ) || { failed "zip Argos"; rm -rf "$tmp"; return 1; }
+    if ! gnome-extensions install --force "$zip" >/dev/null 2>&1; then
+        failed "gnome-extensions install Argos"; rm -rf "$tmp"; return 1
+    fi
+    rm -rf "$tmp"
     gnome-extensions enable "$ARGOS_UUID" 2>/dev/null || true
-    done_ "Argos extension installed (log out/in or restart GNOME Shell to activate)"
+    done_ "Argos extension installed for GNOME $shell_ver — log out and back in to activate it"
 }
 
 geekbar() {
@@ -366,7 +388,7 @@ geekbar() {
     if argos_installed; then
         skip "Argos extension present"
     elif (( DRY_RUN )); then
-        bx_dim "  [dry-run] install Argos from extensions.gnome.org"
+        bx_dim "  [dry-run] install Argos from github.com/p-e-w/argos master"
     else
         install_argos || return 1
     fi

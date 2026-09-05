@@ -209,6 +209,10 @@ APT security count, …). State lives under
 `~/.cache/geekbar/` and `~/.local/state/geekbar/` so notifications
 don't repeat until the bucket changes.
 
+`bx run bootstrap` installs Argos from upstream master (the extensions.gnome.org
+build is 2019-era and only declares GNOME 3.32) and enables the plugin; log out
+and back in once for GNOME to load the extension.
+
 ```bash
 bx plugin enable geekbar     # symlink into ~/.config/argos/
 bx enable geekbar-track      # shell hook: refresh git/cloud caches on cd / aws login
