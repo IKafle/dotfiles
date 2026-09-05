@@ -115,7 +115,7 @@ disable_bell() {
 # ── Routing logic ────────────────────────────────────────────
 route_file() {
     local f="$1"
-    [ -f "$f" ] || return
+    [ -f "$f" ] || return 0
 
     local name ext lower_name
     name="$(basename "$f")"
@@ -221,7 +221,7 @@ is_code_project() {
 # Scan a directory: route files, move code project dirs as a whole
 scan_dir() {
     local src="$1"
-    [ -d "$src" ] || return
+    [ -d "$src" ] || return 0
 
     for item in "$src"/*; do
         [ -e "$item" ] || continue
