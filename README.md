@@ -62,7 +62,7 @@ bx help
 ├── plugins/           files that must live outside ~/.bin (Argos, …)
 ├── enabled-plugins/   symlinks → plugins/
 ├── completions/       bash completions, auto-sourced
-├── config/            install-time data read by bootstrap
+├── config/            install-time data read by bootstrap; rofi.rasi, passed by the launcher
 ├── claude/            Claude Code status line
 ├── tests/             shell tests, run by the pre-commit hook and bootstrap
 ├── hooks/             git hooks (pre-commit: lint, tests, load, dry-run; pre-push: is HEAD smoked?)
@@ -83,7 +83,7 @@ Modules load in filename order. Prefixes: `10-` env, `20-` aliases,
 | `claude-init` | Claude Code status line |
 | `vault-init` | lay out `~/vault`, sweep loose files from `~` into it |
 | `rofi-init` | bind Super-d to the rofi launcher (GNOME custom shortcut) |
-| `rofi-launcher` | what Super-d runs: `rofi -show drun` |
+| `rofi-launcher` | what Super-d runs: toggle rofi, X11 backend, GNOME DPI, `config/rofi.rasi` |
 | `geekbar-doctor` | check geekbar's dependencies and install |
 | `bootstrap-smoke` | run bootstrap in a clean Ubuntu container, prove a fresh machine comes up green |
 
