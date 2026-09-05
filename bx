@@ -653,7 +653,7 @@ cmd_lint() {
     local conf="$BX_CONFIG/bootstrap.conf" k
     if [[ -f "$conf" ]]; then
         grep -vE '^[[:space:]]*(#|$)' "$conf" | grep -qvE '^[A-Z][A-Z0-9_]*=' && bad+=("bootstrap.conf:malformed-line")
-        for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR CLAUDE_INSTALLER; do
+        for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR NERD_FONT_URL NERD_FONT_FAMILY CLAUDE_INSTALLER; do
             grep -qE "^$k=.+" "$conf" || bad+=("bootstrap.conf:missing-$k")
         done
     else bad+=("bootstrap.conf:missing"); fi

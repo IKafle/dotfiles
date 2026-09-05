@@ -44,7 +44,7 @@ CLAUDE_MARKETPLACE="anthropics/claude-plugins-official"
 
 # Filled by load_config (file) / env / flags — see precedence above.
 TODO_REPO="" GIT_NAME="" GIT_EMAIL=""
-ARGOS_UUID="" ARGOS_TARBALL="" ARGOS_TARBALL_SUBDIR="" CLAUDE_INSTALLER="" CLAUDE_PLUGINS=""
+ARGOS_UUID="" ARGOS_TARBALL="" ARGOS_TARBALL_SUBDIR="" NERD_FONT_URL="" NERD_FONT_FAMILY="" CLAUDE_INSTALLER="" CLAUDE_PLUGINS=""
 declare -A FLAG_OVERRIDE=()
 
 # Filled by detect_os.
@@ -127,7 +127,7 @@ load_config() {
     done < "$f"
 
     local k envk
-    for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR CLAUDE_INSTALLER CLAUDE_PLUGINS; do
+    for k in TODO_REPO GIT_NAME GIT_EMAIL ARGOS_UUID ARGOS_TARBALL ARGOS_TARBALL_SUBDIR NERD_FONT_URL NERD_FONT_FAMILY CLAUDE_INSTALLER CLAUDE_PLUGINS; do
         envk="BX_$k"
         [[ -n "${!envk:-}" ]] && printf -v "$k" '%s' "${!envk}"
         [[ -n "${FLAG_OVERRIDE[$k]:-}" ]] && printf -v "$k" '%s' "${FLAG_OVERRIDE[$k]}"
@@ -498,7 +498,8 @@ argos_ensure_enabled() {
             failed "gnome-extensions enable $ARGOS_UUID"; return 1
         fi
     else
-        bx_warn "Argos is installed but the shell has not loaded it yet — log out and back in, then re-run bootstrap to enable it"
+        argos_queue_enable && done_ "Argos queued to enable at next login" \
+            || bx_warn "Argos is installed but the shell has not loaded it yet — log out and back in, then re-run bootstrap"
     fi
 }
 
@@ -519,8 +520,43 @@ install_argos() {
         failed "gnome-extensions install Argos"; rm -rf "$tmp"; return 1
     fi
     rm -rf "$tmp"
-    gnome-extensions enable "$ARGOS_UUID" 2>/dev/null || true
-    done_ "Argos extension installed for GNOME $shell_ver — log out and back in to activate it"
+    if gnome-extensions enable "$ARGOS_UUID" 2>/dev/null && argos_enabled; then
+        done_ "Argos extension installed and enabled for GNOME $shell_ver"
+    else
+        # The running shell does not know a freshly installed extension until
+        # re-login, so `enable` fails. Queue it in the shell's enabled list
+        # instead: at next login GNOME loads and enables it with no second run.
+        argos_queue_enable
+        done_ "Argos extension installed for GNOME $shell_ver — activates at next login"
+    fi
+}
+
+argos_queue_enable() {
+    local cur
+    cur=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null) || return 1
+    grep -q "'$ARGOS_UUID'" <<< "$cur" && return 0
+    if [[ "$cur" =~ ^@as\ \[\]$ || "$cur" == "[]" ]]; then cur="['$ARGOS_UUID']"
+    else cur="${cur%]}, '$ARGOS_UUID']"; fi
+    gsettings set org.gnome.shell enabled-extensions "$cur"
+}
+
+# geekbar's bar font: the Nerd Font build of JetBrains Mono, per-user, no sudo.
+# Not `fc-list | grep -q`: under pipefail grep -q quits at the first match, fc-list
+# dies of SIGPIPE on its long listing, and the pipeline reports "missing".
+have_font() { [[ -n "$(fc-list 2>/dev/null | grep -i "$1")" ]]; }
+nerd_font() {
+    if have_font "$NERD_FONT_FAMILY"; then skip "$NERD_FONT_FAMILY present"; return 0; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] install $NERD_FONT_FAMILY from $NERD_FONT_URL"; return 0; fi
+    local dir="$HOME/.local/share/fonts/${NERD_FONT_FAMILY// /}"
+    mkdir -p "$dir"
+    if ! curl -fsSL "$NERD_FONT_URL" | tar -xJ -C "$dir" 2>/dev/null; then
+        failed "download $NERD_FONT_FAMILY from $NERD_FONT_URL"; rmdir "$dir" 2>/dev/null; return 1
+    fi
+    # Full refresh: caching only $dir leaves the parent ~/.local/share/fonts
+    # cache stale and fc-list does not see the new family until later.
+    fc-cache -f >/dev/null 2>&1 || true
+    if have_font "$NERD_FONT_FAMILY"; then done_ "$NERD_FONT_FAMILY installed to $dir"
+    else failed "$NERD_FONT_FAMILY unpacked to $dir but fc-list does not see it"; return 1; fi
 }
 
 geekbar() {
@@ -535,6 +571,7 @@ geekbar() {
     else
         install_argos || return 1
     fi
+    nerd_font || true
     if (( DRY_RUN )); then bx_dim "  [dry-run] bx plugin enable geekbar"; return 0; fi
     local out
     if out=$("$TARGET/bx" plugin enable geekbar 2>&1); then

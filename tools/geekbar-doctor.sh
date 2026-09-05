@@ -237,7 +237,8 @@ check_system() {
     fi
 
     # JetBrainsMono Nerd Font — the bar's font directive depends on it.
-    if have fc-list && fc-list 2>/dev/null | grep -qi 'JetBrainsMono Nerd Font'; then
+    # Not `| grep -q`: with pipefail, grep -q quitting early makes fc-list fail on SIGPIPE.
+    if have fc-list && [[ -n "$(fc-list 2>/dev/null | grep -i 'JetBrainsMono Nerd Font')" ]]; then
         yes "JetBrainsMono Nerd Font installed"
     else
         no "JetBrainsMono Nerd Font missing  → the plain fonts-jetbrains-mono package is not enough; get the Nerd Font build from https://www.nerdfonts.com/font-downloads into ~/.local/share/fonts"
