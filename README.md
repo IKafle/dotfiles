@@ -16,8 +16,9 @@ bash dotfiles/tools/bootstrap.sh --dry-run  # preview first if you like
 with `bx run bootstrap`; every step skips itself when already done. It
 relocates the tree to `~/.bin`, runs `bx install`, enforces the global git
 identity (bx is its source of truth), installs every apt package the modules,
-plugins and tools call, clones the todo app to `~/todo`, installs the GitHub CLI, the Claude Code CLI + status line, Docker, and the
-Argos extension + geekbar plugin (GNOME only), then runs `bx doctor` +
+plugins and tools call, clones the todo app to `~/todo`, installs the GitHub CLI, the Claude Code CLI + status line, Docker, the
+Argos extension + geekbar plugin and the Super-d rofi launcher (GNOME only),
+then runs `bx doctor` +
 `bx selftest` in a fresh shell. Each step can be skipped:
 
 | flag                | effect                                                    |
@@ -25,7 +26,7 @@ Argos extension + geekbar plugin (GNOME only), then runs `bx doctor` +
 | `--todo-repo <url>` | override the todo app repo (default `IKafle/todo`, or `BX_TODO_REPO`) |
 | `--git-name` `--git-email` | global git identity to enforce (or `BX_GIT_NAME` / `BX_GIT_EMAIL`) |
 | `--no-apt` `--no-gh` `--no-claude` | skip that installer                       |
-| `--no-docker` `--no-geekbar` | skip that installer                             |
+| `--no-docker` `--no-geekbar` `--no-rofi` | skip that installer                 |
 | `--vault`           | run `vault-init` (opt-in: it sweeps loose files from `~` into `~/vault`) |
 | `--no-verify`       | skip doctor/selftest/tests at the end                     |
 | `--dry-run`         | print what would happen; change nothing                   |
@@ -143,11 +144,12 @@ full-width stacked layout on narrow terminals. Resize, then open a new terminal
 |----------------------------|------------------------------------------|
 | `bootstrap`                | fresh-machine entrypoint (idempotent)    |
 | `docker-init`              | install docker-ce + compose on Ubuntu    |
-| `docker-desktop-init`      | install Docker Desktop (KVM-isolated)    |
 | `vault-init`               | bootstrap `~/vault` workspace            |
 | `claude-init`              | wire the Claude Code status line         |
 | `geekbar-doctor`           | diagnose the geekbar plugin install      |
-| `geekbar-test`             | render the bar + dropdown to stdout      |
+| `rofi-init`                | bind Super-d to the rofi launcher (GNOME)|
+| `rofi-launcher`            | the launcher itself: `rofi -show drun`   |
+| `install-gh`               | install the GitHub CLI from its apt repo |
 
 Run with `bx run <tool>` or directly: `bash ~/.bin/tools/<tool>.sh`.
 
@@ -225,8 +227,16 @@ and back in once for GNOME to load the extension.
 bx plugin enable geekbar     # symlink into ~/.config/argos/
 bx enable geekbar-track      # shell hook: refresh git/cloud caches on cd / aws login
 bx run geekbar-doctor        # verify the install, missing deps, stale state
-bx run geekbar-test          # render the bar + dropdown to stdout for inspection
 ```
+
+## Rofi launcher
+
+`Super-d` opens `rofi -show drun`. `bx run rofi-init` (part of bootstrap) frees
+`<Super>d` from Ubuntu's show-desktop default and registers a GNOME custom
+shortcut pointing at `tools/rofi-launcher.sh` — no keybinding daemon, native
+on Wayland, idempotent. rofi 2.x from apt is Wayland-capable, so nothing is
+built from source. Change the key or command at the top of `tools/rofi-init.sh`
+and re-run it.
 
 Customisation lives in **one file**: `~/.bin/plugins/geekbar/config.sh`.
 Edit the `BAR_WIDGETS` array (what shows in the panel), the

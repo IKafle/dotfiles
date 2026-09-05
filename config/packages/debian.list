@@ -41,3 +41,6 @@ wl-clipboard
 xclip
 pulseaudio-utils
 cowsay
+
+# launcher
+rofi

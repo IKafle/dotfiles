@@ -1,5 +1,10 @@
-#!/bin/bash
-# bx-purpose: launch rofi app menu under Wayland (bound to Super-d via xremap)
-export WAYLAND_DISPLAY=$(ls /run/user/$(id -u)/wayland-* 2>/dev/null | head -1 | xargs basename)
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-/usr/local/bin/rofi -show drun
+#!/usr/bin/env bash
+# bx-purpose: launch the rofi app menu (Super-d, bound by rofi-init)
+# WAYLAND_DISPLAY / XDG_RUNTIME_DIR are filled in only when absent, for callers
+# that run outside the session environment. GNOME shortcuts already have them.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+    WAYLAND_DISPLAY=$(ls "$XDG_RUNTIME_DIR"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -1 | xargs -r basename)
+    export WAYLAND_DISPLAY
+fi
+exec rofi -show drun
