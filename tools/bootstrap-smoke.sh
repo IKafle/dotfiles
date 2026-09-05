@@ -7,6 +7,8 @@
 # container as an unprivileged user with passwordless sudo, runs the full
 # bootstrap (minus docker: no systemd in a container), and prints the summary.
 # Image comes from SMOKE_IMAGE in config/bootstrap.conf (or BX_SMOKE_IMAGE).
+# The container gets a `git clone` of this tree, i.e. HEAD — commit first;
+# uncommitted edits are not exercised.
 #
 # Usage: bx run bootstrap-smoke [--keep]      (--keep: leave the container for inspection)
 set -uo pipefail
@@ -39,6 +41,8 @@ printf '── bootstrap-smoke: %s ──\n' "$IMAGE" >&2
         echo "tester ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/tester
         su - tester -c "
             set -e
+            # The mounts are owned by the host uid, not tester: git would refuse them.
+            git config --global --add safe.directory \"*\"
             git clone -q /src ~/dotfiles
             git -C ~/dotfiles remote set-url origin git@github.com:IKafle/dotfiles.git
             ${BX_TODO_REPO:+export BX_TODO_REPO=$BX_TODO_REPO;}

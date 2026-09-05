@@ -38,6 +38,8 @@ WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_ROFI=1 WITH_VAULT=1
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
 CONFIG_DIR="$ROOT/config"
 OS_RELEASE_FILE="${BX_OS_RELEASE_FILE:-/etc/os-release}"
+# A fresh install knows no marketplace; plugins in CLAUDE_PLUGINS come from this one.
+CLAUDE_MARKETPLACE="anthropics/claude-plugins-official"
 
 # Filled by load_config (file) / env / flags — see precedence above.
 TODO_REPO="" GIT_NAME="" GIT_EMAIL=""
@@ -439,9 +441,24 @@ claude_plugins() {
     done
     if (( ${#missing[@]} == 0 )); then skip "plugins present: $CLAUDE_PLUGINS"; return 0; fi
     if (( DRY_RUN )); then bx_dim "  [dry-run] claude plugins install ${missing[*]}"; return 0; fi
-    local bad=()
+    # `plugins install <name>` only searches configured marketplaces, and a
+    # fresh machine has none — register the official one first (idempotent).
+    local mk_name="${CLAUDE_MARKETPLACE##*/}" mk_out
+    if ! "$claude_bin" plugin marketplace list --json 2>/dev/null | jq -e --arg n "$mk_name" \
+            'any(.[]; .name == $n)' >/dev/null 2>&1; then
+        if mk_out=$("$claude_bin" plugin marketplace add "$CLAUDE_MARKETPLACE" 2>&1); then
+            bx_dim "  marketplace added: $mk_name"
+        else
+            printf '%s\n' "$mk_out" | tail -3 | sed 's/^/    /' >&2
+            failed "claude plugin marketplace add: $CLAUDE_MARKETPLACE"; return 1
+        fi
+    fi
+    local bad=() out
     for p in "${missing[@]}"; do
-        "$claude_bin" plugins install "$p" >/dev/null 2>&1 || bad+=("$p")
+        if ! out=$("$claude_bin" plugins install "$p" 2>&1); then
+            printf '%s\n' "$out" | tail -3 | sed 's/^/    /' >&2
+            bad+=("$p")
+        fi
     done
     if (( ${#bad[@]} )); then failed "claude plugins install: ${bad[*]}"
     else done_ "claude plugins installed: ${missing[*]}"; fi
