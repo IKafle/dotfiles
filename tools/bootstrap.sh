@@ -20,7 +20,7 @@
 #   --no-docker         skip docker-init (Docker's apt repo, engine + compose)
 #   --no-geekbar        skip the Argos GNOME extension + geekbar plugin
 #   --no-rofi           skip binding Super-d to the rofi launcher (rofi-init)
-#   --vault             run vault-init (creates ~/vault AND sweeps loose files from ~ into it)
+#   --no-vault          skip vault-init (creates ~/vault AND sweeps loose files from ~ into it)
 #   --no-verify         skip doctor/selftest/tests at the end
 #   --dry-run           print what would happen; change nothing
 #
@@ -33,7 +33,7 @@ SELF=$(readlink -f "${BASH_SOURCE[0]}")
 ROOT=$(dirname "$(dirname "$SELF")")
 
 DRY_RUN=0
-WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_ROFI=1 WITH_VAULT=0
+WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_ROFI=1 WITH_VAULT=1
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
 CONFIG_DIR="$ROOT/config"
 OS_RELEASE_FILE="${BX_OS_RELEASE_FILE:-/etc/os-release}"
@@ -94,7 +94,7 @@ parse_args() {
             --no-docker)   WITH_DOCKER=0 ;;
             --no-geekbar)  WITH_GEEKBAR=0 ;;
             --no-rofi)     WITH_ROFI=0 ;;
-            --vault)       WITH_VAULT=1 ;;
+            --no-vault)    WITH_VAULT=0 ;;
             --no-apt)      SKIP_APT=1 ;;
             --no-gh)       SKIP_GH=1 ;;
             --no-claude)   SKIP_CLAUDE=1 ;;
@@ -355,7 +355,8 @@ todo_app() {
 
 vault() {
     phase "vault (~/vault)"
-    if (( ! WITH_VAULT )); then skip "vault-init not requested (--vault); it sweeps loose files from ~ into ~/vault"; return 0; fi
+    if (( ! WITH_VAULT )); then skip "vault-init (--no-vault)"; return 0; fi
+    bx_dim "  vault-init also sweeps loose files from ~, ~/Documents and ~/Desktop into ~/vault"
     if (( DRY_RUN )); then bx_dim "  [dry-run] bx run vault-init"; return 0; fi
     local out
     if out=$(bash "$TARGET/tools/vault-init.sh" 2>&1); then
@@ -488,9 +489,23 @@ rofi_launcher() {
             *"Nothing to do"*) skip "Super-d already launches rofi" ;;
             *)                 done_ "Super-d → rofi-launcher (GNOME custom shortcut)" ;;
         esac
-        [[ "$out" == *"rofi is not installed"* ]] && bx_warn "rofi binary missing — the apt phase installs it (config/packages)"
     else
         failed "rofi-init: $(printf '%s\n' "$out" | tail -1)"
+        return 1
+    fi
+
+    # The launcher is what Super-d actually runs — check the whole chain.
+    local launcher="$TARGET/tools/rofi-launcher.sh" bound
+    bound=$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command 2>/dev/null | tr -d "'")
+    [[ -x "$launcher" ]] || run chmod +x "$launcher"
+    if ! command -v rofi >/dev/null; then
+        failed "rofi binary missing — the apt phase installs it (drop --no-apt)"
+    elif ! bash -n "$launcher" 2>/dev/null; then
+        failed "rofi-launcher.sh has a syntax error"
+    elif [[ "$bound" != "$launcher" ]]; then
+        failed "Super-d is bound to '${bound:-nothing}', not $launcher"
+    else
+        done_ "launcher ready: Super-d → rofi -show drun ($(rofi -version 2>/dev/null | head -1))"
     fi
 }
 

@@ -16,7 +16,8 @@ bash dotfiles/tools/bootstrap.sh --dry-run  # preview first if you like
 with `bx run bootstrap`; every step skips itself when already done. It
 relocates the tree to `~/.bin`, runs `bx install`, enforces the global git
 identity (bx is its source of truth), installs every apt package the modules,
-plugins and tools call, clones the todo app to `~/todo`, installs the GitHub CLI, the Claude Code CLI + status line, Docker, the
+plugins and tools call, clones the todo app to `~/todo`, lays out `~/vault`
+(sweeping loose files from `~` into it), installs the GitHub CLI, the Claude Code CLI + status line, Docker, the
 Argos extension + geekbar plugin and the Super-d rofi launcher (GNOME only),
 then runs `bx doctor` +
 `bx selftest` in a fresh shell. Each step can be skipped:
@@ -26,8 +27,7 @@ then runs `bx doctor` +
 | `--todo-repo <url>` | override the todo app repo (default `IKafle/todo`, or `BX_TODO_REPO`) |
 | `--git-name` `--git-email` | global git identity to enforce (or `BX_GIT_NAME` / `BX_GIT_EMAIL`) |
 | `--no-apt` `--no-gh` `--no-claude` | skip that installer                       |
-| `--no-docker` `--no-geekbar` `--no-rofi` | skip that installer                 |
-| `--vault`           | run `vault-init` (opt-in: it sweeps loose files from `~` into `~/vault`) |
+| `--no-docker` `--no-geekbar` `--no-rofi` `--no-vault` | skip that installer    |
 | `--no-verify`       | skip doctor/selftest/tests at the end                     |
 | `--dry-run`         | print what would happen; change nothing                   |
 
