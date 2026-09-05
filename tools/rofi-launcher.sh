@@ -16,5 +16,11 @@ unset WAYLAND_DISPLAY
 # With xwayland-native-scaling GNOME advertises the DPI X apps must draw at
 # in Xft.dpi (192 here); rofi's own detection lands on 96, i.e. half size.
 dpi=$(xrdb -query 2>/dev/null | awk '/^Xft\.dpi:/ {print $2}')
+
+# -normal-window: rofi normally maps an override-redirect window and grabs
+# keyboard + pointer the X11 way. Mutter refuses X11 grabs from XWayland
+# (org.gnome.mutter.wayland xwayland-allow-grabs=false), so that window drew
+# but never received a key or a click. As a managed window GNOME focuses it
+# like any app: typing, arrows, mouse and Escape all work.
 BX_HOME="${BX_HOME:-$HOME/.bin}"
-exec rofi -show drun -config "$BX_HOME/config/rofi.rasi" -dpi "${dpi:-96}"
+exec rofi -show drun -normal-window -config "$BX_HOME/config/rofi.rasi" -dpi "${dpi:-96}"
