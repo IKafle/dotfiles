@@ -187,15 +187,16 @@ reexec_from_target() {
 wire_shell() {
     phase "shell"
     export BX_HOME="$TARGET"
-    if grep -Eq "(\\\$HOME|~|$HOME)/\.bin/init\.sh" "$HOME/.bashrc" 2>/dev/null; then
-        skip "~/.bashrc already sources init.sh"
+    if (( DRY_RUN )); then bx_dim "  [dry-run] bx install"; return 0; fi
+    local out
+    if out=$("$TARGET/bx" install 2>&1); then
+        case "$out" in
+            *"already sources"*) skip "~/.bashrc already sources init.sh" ;;
+            *)                   done_ "~/.bashrc sources ~/.bin/init.sh" ;;
+        esac
     else
-        run "$TARGET/bx" install >/dev/null 2>&1 && done_ "~/.bashrc sources ~/.bin/init.sh" \
-            || failed "bx install"
+        failed "bx install: $out"
     fi
-    [[ -x "$TARGET/bx" ]] || run chmod +x "$TARGET/bx"
-    run chmod +x "$TARGET"/tools/*.sh 2>/dev/null
-    return 0
 }
 
 # ── Phase 2b: git identity ──────────────────────────────────────
@@ -270,9 +271,16 @@ todo_app() {
 vault() {
     phase "vault (~/vault)"
     if (( ! WITH_VAULT )); then skip "vault-init not requested (--vault); it sweeps loose files from ~ into ~/vault"; return 0; fi
-    if [[ -d "$HOME/vault/inbox" && -d "$HOME/vault/code" ]]; then skip "~/vault already laid out"; return 0; fi
-    bx_info "vault-init also sweeps loose files from ~, ~/Documents and ~/Desktop into ~/vault"
-    if run bash "$TARGET/tools/vault-init.sh" >/dev/null; then done_ "vault-init"; else failed "vault-init"; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] bx run vault-init"; return 0; fi
+    local out
+    if out=$(bash "$TARGET/tools/vault-init.sh" 2>&1); then
+        case "$out" in
+            *"Nothing new to organize"*) skip "vault-init: nothing new to organize" ;;
+            *) done_ "vault-init: $(printf '%s\n' "$out" | grep -oE 'Moved [0-9]+ item\(s\)' || echo 'laid out ~/vault')" ;;
+        esac
+    else
+        failed "vault-init"
+    fi
 }
 
 ssh_key_hint() {
@@ -310,17 +318,15 @@ claude_cli() {
 claude_statusline() {
     phase "Claude Code status line"
     if (( SKIP_CLAUDE )); then skip "claude-init (--no-claude)"; return 0; fi
-    if ! command -v python3 >/dev/null; then failed "python3 missing — claude-init needs it"; return 1; fi
-    local link="$HOME/.claude/statusline.py"
-    if [[ -L "$link" && "$(readlink "$link")" == "$TARGET/claude/statusline.py" ]] \
-        && grep -q '"statusLine"' "$HOME/.claude/settings.json" 2>/dev/null; then
-        skip "status line already wired"
-        return 0
-    fi
-    if run bash "$TARGET/tools/claude-init.sh" >/dev/null; then
-        done_ "claude status line configured"
+    if (( DRY_RUN )); then bx_dim "  [dry-run] bx run claude-init"; return 0; fi
+    local out
+    if out=$(bash "$TARGET/tools/claude-init.sh" 2>&1); then
+        case "$out" in
+            *"Nothing to do"*) skip "status line already wired" ;;
+            *)                 done_ "claude status line configured" ;;
+        esac
     else
-        failed "claude-init"
+        failed "claude-init: $(printf '%s\n' "$out" | grep -m1 WARNING || echo 'see ~/.claude/claude-init.log')"
     fi
 }
 
@@ -364,11 +370,13 @@ geekbar() {
     else
         install_argos || return 1
     fi
-    local link="$HOME/.config/argos/geekbar.2s+.sh"
-    if [[ -L "$link" && "$(readlink -f "$link")" == "$TARGET/plugins/geekbar/geekbar.argos.sh" ]]; then
-        skip "geekbar plugin already enabled"
-    elif run "$TARGET/bx" plugin enable geekbar >/dev/null 2>&1; then
-        done_ "geekbar plugin enabled"
+    if (( DRY_RUN )); then bx_dim "  [dry-run] bx plugin enable geekbar"; return 0; fi
+    local out
+    if out=$("$TARGET/bx" plugin enable geekbar 2>&1); then
+        case "$out" in
+            *"already enabled"*) skip "geekbar plugin already enabled" ;;
+            *)                   done_ "geekbar plugin enabled (postenable ran geekbar-doctor)" ;;
+        esac
     else
         failed "bx plugin enable geekbar"
     fi
@@ -387,15 +395,9 @@ verify() {
     if [[ -n "$fails" ]]; then failed "fresh shell: modules failed: $fails"
     else done_ "fresh shell loads $loaded modules, none failed"; fi
 
-    # doctor is expected to flag "init.sh NOT loaded in this shell" here; source it first.
-    if (BX_HOME="$TARGET" bash -c '. "$HOME/.bin/init.sh" >/dev/null 2>&1; "$HOME/.bin/bx" doctor' >/dev/null 2>&1); then
-        done_ "bx doctor"
-    else
-        failed "bx doctor — run it for details"
-    fi
-
+    # selftest covers doctor, the clean-env load, guards and metadata.
     if (bash -c '. "$HOME/.bin/init.sh" >/dev/null 2>&1; "$HOME/.bin/bx" selftest' >/dev/null 2>&1); then
-        done_ "bx selftest"
+        done_ "bx selftest (includes bx doctor)"
     else
         failed "bx selftest — run it for details"
     fi
