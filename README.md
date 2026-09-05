@@ -20,7 +20,7 @@ extensions and the docker group.
 | flag | effect |
 |---|---|
 | `--dry-run` | print the plan, change nothing |
-| `--no-apt` `--no-gh` `--no-claude` `--no-docker` `--no-geekbar` `--no-rofi` `--no-vault` | skip that step |
+| `--no-apt` `--no-gh` `--no-claude` `--no-docker` `--no-geekbar` `--no-rofi` `--no-terminal` `--no-vault` `--no-todo` | skip that step |
 | `--todo-repo`, `--git-name`, `--git-email` | override a config value for this run |
 | `--no-verify` | skip doctor / selftest / tests |
 
@@ -84,6 +84,8 @@ Modules load in filename order. Prefixes: `10-` env, `20-` aliases,
 | `vault-init` | lay out `~/vault`, sweep loose files from `~` into it |
 | `rofi-init` | bind Super-d to the rofi launcher (GNOME custom shortcut) |
 | `rofi-launcher` | what Super-d runs: toggle rofi, X11 backend, GNOME DPI, `config/rofi.rasi` |
+| `terminal-init` | bind Super-Enter to the terminal launcher (GNOME custom shortcut) |
+| `terminal-launcher` | what Super-Enter runs: the desktop's terminal (`xdg-terminal-exec` → Ptyxis), with fallbacks |
 | `geekbar-doctor` | check geekbar's dependencies and install |
 | `bootstrap-smoke` | run bootstrap in a clean Ubuntu container, prove a fresh machine comes up green |
 

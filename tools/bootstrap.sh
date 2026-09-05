@@ -21,6 +21,7 @@
 #   --no-docker         skip docker-init (Docker's apt repo, engine + compose)
 #   --no-geekbar        skip the Argos GNOME extension + geekbar plugin
 #   --no-rofi           skip binding Super-d to the rofi launcher (rofi-init)
+#   --no-terminal       skip binding Super-Enter to the terminal (terminal-init)
 #   --no-vault          skip vault-init (creates ~/vault AND sweeps loose files from ~ into it)
 #   --no-todo           skip cloning TODO_REPO into ~/todo (e.g. no key for a private repo)
 #   --no-verify         skip doctor/selftest/tests at the end
@@ -35,7 +36,7 @@ SELF=$(readlink -f "${BASH_SOURCE[0]}")
 ROOT=$(dirname "$(dirname "$SELF")")
 
 DRY_RUN=0
-WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_ROFI=1 WITH_VAULT=1 WITH_TODO=1
+WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_ROFI=1 WITH_TERMINAL=1 WITH_VAULT=1 WITH_TODO=1
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
 CONFIG_DIR="$ROOT/config"
 OS_RELEASE_FILE="${BX_OS_RELEASE_FILE:-/etc/os-release}"
@@ -98,6 +99,7 @@ parse_args() {
             --no-docker)   WITH_DOCKER=0 ;;
             --no-geekbar)  WITH_GEEKBAR=0 ;;
             --no-rofi)     WITH_ROFI=0 ;;
+            --no-terminal) WITH_TERMINAL=0 ;;
             --no-vault)    WITH_VAULT=0 ;;
             --no-todo)     WITH_TODO=0 ;;
             --no-apt)      SKIP_APT=1 ;;
@@ -616,6 +618,22 @@ rofi_launcher() {
     fi
 }
 
+terminal_shortcut() {
+    phase "terminal shortcut"
+    if (( ! WITH_TERMINAL )); then skip "terminal-init (--no-terminal)"; return 0; fi
+    if ! command -v gsettings >/dev/null; then skip "not a GNOME session"; return 0; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] bx run terminal-init"; return 0; fi
+    local out
+    if out=$(bash "$TARGET/tools/terminal-init.sh" 2>&1); then
+        case "$out" in
+            *"Nothing to do"*) skip "Super-Enter already opens a terminal" ;;
+            *)                 done_ "Super-Enter → terminal-launcher (GNOME custom shortcut)" ;;
+        esac
+    else
+        failed "terminal-init: $(printf '%s\n' "$out" | tail -1)"
+    fi
+}
+
 # ── Phase 7: verify ─────────────────────────────────────────────
 verify() {
     phase "verify"
@@ -678,6 +696,7 @@ main() {
     docker_engine
     geekbar
     rofi_launcher
+    terminal_shortcut
     verify
     summary
 }
