@@ -7,6 +7,8 @@
 #
 # Flags:
 #   --todo-repo <url>   todo app repo to clone to ~/todo (default: BX_TODO_REPO or git@github.com:IKafle/todo.git)
+#   --git-name <name>   global git identity to enforce (default: BX_GIT_NAME or "ishwor kafle")
+#   --git-email <addr>  ... and its email (default: BX_GIT_EMAIL or hello.ishworkafle@gmail.com)
 #   --docker            run docker-init (adds Docker's apt repo, installs engine + compose)
 #   --geekbar           install the Argos GNOME extension and enable the geekbar plugin
 #   --vault             run vault-init (creates ~/vault AND sweeps loose files from ~ into it)
@@ -28,6 +30,8 @@ DRY_RUN=0
 WITH_DOCKER=0 WITH_GEEKBAR=0 WITH_VAULT=0
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
 TODO_REPO="${BX_TODO_REPO:-git@github.com:IKafle/todo.git}"
+GIT_NAME="${BX_GIT_NAME:-ishwor kafle}"
+GIT_EMAIL="${BX_GIT_EMAIL:-hello.ishworkafle@gmail.com}"
 ARGOS_UUID="argos@pew.worldwidemann.com"
 
 APT_PACKAGES=(
@@ -73,6 +77,12 @@ parse_args() {
             --todo-repo)   [[ -n "${2:-}" ]] || { bx_err "--todo-repo needs a url"; exit 2; }
                            TODO_REPO=$2; shift ;;
             --todo-repo=*) TODO_REPO=${1#*=} ;;
+            --git-name)    [[ -n "${2:-}" ]] || { bx_err "--git-name needs a value"; exit 2; }
+                           GIT_NAME=$2; shift ;;
+            --git-name=*)  GIT_NAME=${1#*=} ;;
+            --git-email)   [[ -n "${2:-}" ]] || { bx_err "--git-email needs a value"; exit 2; }
+                           GIT_EMAIL=$2; shift ;;
+            --git-email=*) GIT_EMAIL=${1#*=} ;;
             --docker)      WITH_DOCKER=1 ;;
             --geekbar)     WITH_GEEKBAR=1 ;;
             --vault)       WITH_VAULT=1 ;;
@@ -176,6 +186,24 @@ wire_shell() {
     [[ -x "$TARGET/bx" ]] || run chmod +x "$TARGET/bx"
     run chmod +x "$TARGET"/tools/*.sh 2>/dev/null
     return 0
+}
+
+# ── Phase 2b: git identity ──────────────────────────────────────
+# bx is the source of truth for the global identity: whatever is there is
+# replaced by the configured values (defaults above, or --git-name/--git-email).
+git_identity() {
+    phase "git identity"
+    local cur_name cur_email
+    cur_name=$(git config --global --get user.name 2>/dev/null || true)
+    cur_email=$(git config --global --get user.email 2>/dev/null || true)
+    if [[ "$cur_name" == "$GIT_NAME" && "$cur_email" == "$GIT_EMAIL" ]]; then
+        skip "global identity already $GIT_NAME <$GIT_EMAIL>"
+        return 0
+    fi
+    [[ -n "$cur_name$cur_email" ]] && bx_warn "replacing global identity ${cur_name:-?} <${cur_email:-?}>"
+    run git config --global user.name  "$GIT_NAME"  || { failed "git config user.name"; return 1; }
+    run git config --global user.email "$GIT_EMAIL" || { failed "git config user.email"; return 1; }
+    done_ "global git identity: $GIT_NAME <$GIT_EMAIL>"
 }
 
 # ── Phase 3: apt packages ───────────────────────────────────────
@@ -369,6 +397,7 @@ main() {
     preflight
     relocate
     wire_shell
+    git_identity
     apt_packages
     todo_app
     vault
