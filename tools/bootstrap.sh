@@ -427,7 +427,11 @@ claude_plugins() {
     [[ -n "${CLAUDE_PLUGINS//[[:space:]]/}" ]] || { skip "CLAUDE_PLUGINS empty in bootstrap.conf"; return 0; }
     local claude_bin
     claude_bin=$(command -v claude || echo "$HOME/.local/bin/claude")
-    [[ -x "$claude_bin" ]] || { failed "claude CLI not available — plugins need it"; return 1; }
+    if [[ ! -x "$claude_bin" ]]; then
+        # The CLI phase installs it first; in a dry run that hasn't happened.
+        if (( DRY_RUN )); then bx_dim "  [dry-run] claude plugins install $CLAUDE_PLUGINS"; return 0; fi
+        failed "claude CLI not available — plugins need it"; return 1
+    fi
     local installed p missing=()
     installed=$("$claude_bin" plugins list --json 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)
     for p in $CLAUDE_PLUGINS; do
