@@ -44,7 +44,7 @@ bx new <name>         # scaffold a module   (--tool for a tool)
 bx run <tool>         # run a tool from tools/
 bx plugin <verb>      # ls / enable / disable / new / doctor
 bx doctor             # health check (runtime)
-bx lint               # contract check (structure) — also runs in the pre-commit hook and CI
+bx lint               # contract check (structure) — also runs in the pre-commit hook
 bx selftest           # lint + doctor + load checks
 bx help
 ```
@@ -64,8 +64,8 @@ bx help
 ├── completions/       bash completions, auto-sourced
 ├── config/            install-time data read by bootstrap
 ├── claude/            Claude Code status line
-├── tests/             shell tests, run by the hook, CI and bootstrap
-├── hooks/             git hooks (pre-commit: lint + tests)
+├── tests/             shell tests, run by the pre-commit hook and bootstrap
+├── hooks/             git hooks (pre-commit: lint, tests, load, dry-run; pre-push: bootstrap-smoke)
 └── docs/              notes and ADRs
 ```
 
@@ -110,5 +110,6 @@ with `bx doctor` as the next step when something failed.
 ## Changing things
 
 `CLAUDE.md` is the contract, and `bx lint` enforces it: every structural rule
-has a numbered check that runs on demand, in the pre-commit hook `bx install`
-activates, and in CI on every push. Decisions with a reason live in `docs/adr/`.
+has a numbered check that runs on demand and in the pre-commit hook `bx install`
+activates. `hooks/pre-push` bootstraps HEAD in a fresh container; there is no
+CI (`docs/adr/0006`). Decisions with a reason live in `docs/adr/`.

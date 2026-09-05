@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# bx pre-push: prove HEAD bootstraps a fresh Ubuntu before it leaves this
+# machine. Replaces CI (docs/adr/0006): the only check that catches "it worked
+# here because this laptop already had it". Takes a few minutes and needs the
+# docker daemon. Bypass only with a reason: git push --no-verify
+set -uo pipefail
+BX_HOME=$(git rev-parse --show-toplevel)
+export BX_HOME
+printf '\n── pre-push: bootstrap-smoke ──\n' >&2
+if bash "$BX_HOME/tools/bootstrap-smoke.sh"; then
+    printf '\033[32m✔ pre-push: fresh machine bootstraps green\033[0m\n' >&2
+else
+    printf '\n\033[31m✘ push blocked — HEAD does not bootstrap a fresh machine (see above)\033[0m\n' >&2
+    exit 1
+fi

@@ -3,9 +3,10 @@
 `~/.bin` is the single source of truth for the owner's shell. `~/.bashrc` is one
 line, `init.sh` loads `enabled/*.sh`, `bx` manages the tree, `bx run bootstrap`
 reproduces a machine. This file is the policy; **`bx lint` is the enforcement.**
-Every rule below that carries an `L<n>` is checked by `bx lint`, by the
-pre-commit hook, and by CI (`docs/adr/0005`). A rule without an `L` is reviewed
-by reading, so state your compliance in the commit message.
+Every rule below that carries an `L<n>` is checked by `bx lint` and by the
+pre-commit hook (`docs/adr/0005`); there is no CI — the git hooks are the whole
+gate (`docs/adr/0006`). A rule without an `L` is reviewed by reading, so state
+your compliance in the commit message.
 
 ## Non-negotiables
 
@@ -104,9 +105,10 @@ tool must still skip when already applied; run the affected `tests/` file.
 ## Enforcement
 
 - `bx lint` — static, seconds. `bx selftest` — lint + doctor + load checks.
-- `hooks/pre-commit` — lint + `tests/`; `bx install` activates it.
-  `--no-verify` only with the reason in the commit message.
-- `.github/workflows/ci.yml` — the same on every push, clean Ubuntu, shellcheck on.
+- `hooks/pre-commit` — lint + `tests/` + modules load + bootstrap dry-run;
+  `bx install` activates it. `--no-verify` only with the reason in the commit message.
+- `hooks/pre-push` — `bootstrap-smoke`: HEAD bootstraps a fresh Ubuntu container.
+  Minutes, needs docker. No CI (`docs/adr/0006`).
 - `tests/test_lint.sh` proves each rule catches what it claims.
 
 ## Git

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # bx pre-commit: the contract must hold before anything lands. Activated by
-# `bx install` (git config core.hooksPath hooks). Bypass only with a reason:
-# git commit --no-verify
+# `bx install` (git config core.hooksPath hooks). There is no CI — this hook
+# and hooks/pre-push are the whole gate (docs/adr/0006). Bypass only with a
+# reason in the commit message: git commit --no-verify
 set -uo pipefail
 BX_HOME=$(git rev-parse --show-toplevel)
 export BX_HOME
@@ -12,8 +13,20 @@ printf '\n── pre-commit: tests ──\n' >&2
 for t in "$BX_HOME"/tests/test_*.sh; do
     if ! out=$(bash "$t" 2>&1); then printf '%s\n' "$out" | tail -15 >&2; fail=1; fi
 done
+printf '\n── pre-commit: modules load ──\n' >&2
+if out=$(BX_FORCE_LOAD=1 bash -c '. "$BX_HOME/init.sh"; [[ -z "$BX_MODULES_FAILED" ]] || { printf "failed: %s\n" "$BX_MODULES_FAILED"; exit 1; }; printf "%s modules\n" "$BX_MODULES_LOADED"' 2>&1); then
+    printf '  ok: %s\n' "$out" >&2
+else
+    printf '%s\n' "$out" | tail -15 >&2; fail=1
+fi
+printf '\n── pre-commit: bootstrap dry-run ──\n' >&2
+if ! out=$(bash "$BX_HOME/tools/bootstrap.sh" --dry-run --no-verify 2>&1); then
+    printf '%s\n' "$out" | tail -15 >&2; fail=1
+else
+    printf '  ok\n' >&2
+fi
 if (( fail )); then
     printf '\n\033[31m✘ commit blocked — fix the violations above (see CLAUDE.md)\033[0m\n' >&2
     exit 1
 fi
-printf '\033[32m✔ pre-commit: contract holds, tests pass\033[0m\n' >&2
+printf '\033[32m✔ pre-commit: contract holds, tests pass, modules load, bootstrap dry-run ok\033[0m\n' >&2

@@ -20,8 +20,9 @@ same checks run in three places, so they cannot be skipped by accident:
 1. `bx lint` — on demand, static, seconds. `bx selftest` calls it.
 2. `hooks/pre-commit` — tracked in the repo, activated by `bx install`
    (`core.hooksPath=hooks`). Runs lint and `tests/`; blocks the commit.
-3. `.github/workflows/ci.yml` — the same on every push and PR, on a clean
-   Ubuntu, with shellcheck present.
+3. ~~`.github/workflows/ci.yml` — the same on every push and PR, on a clean
+   Ubuntu, with shellcheck present.~~ Superseded by `docs/adr/0006`: no CI;
+   `hooks/pre-push` runs `bootstrap-smoke` in a clean container instead.
 
 A rule that cannot be checked by `bx lint` is written into CLAUDE.md as a
 policy with a named reviewer step, and marked as such.

@@ -22,6 +22,7 @@
 #   --no-geekbar        skip the Argos GNOME extension + geekbar plugin
 #   --no-rofi           skip binding Super-d to the rofi launcher (rofi-init)
 #   --no-vault          skip vault-init (creates ~/vault AND sweeps loose files from ~ into it)
+#   --no-todo           skip cloning TODO_REPO into ~/todo (e.g. no key for a private repo)
 #   --no-verify         skip doctor/selftest/tests at the end
 #   --dry-run           print what would happen; change nothing
 #
@@ -34,7 +35,7 @@ SELF=$(readlink -f "${BASH_SOURCE[0]}")
 ROOT=$(dirname "$(dirname "$SELF")")
 
 DRY_RUN=0
-WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_ROFI=1 WITH_VAULT=1
+WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_ROFI=1 WITH_VAULT=1 WITH_TODO=1
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
 CONFIG_DIR="$ROOT/config"
 OS_RELEASE_FILE="${BX_OS_RELEASE_FILE:-/etc/os-release}"
@@ -98,6 +99,7 @@ parse_args() {
             --no-geekbar)  WITH_GEEKBAR=0 ;;
             --no-rofi)     WITH_ROFI=0 ;;
             --no-vault)    WITH_VAULT=0 ;;
+            --no-todo)     WITH_TODO=0 ;;
             --no-apt)      SKIP_APT=1 ;;
             --no-gh)       SKIP_GH=1 ;;
             --no-claude)   SKIP_CLAUDE=1 ;;
@@ -350,6 +352,7 @@ apt_packages() {
 # ── Phase 4: companion state ────────────────────────────────────
 todo_app() {
     phase "todo app (~/todo)"
+    if (( ! WITH_TODO )); then skip "todo clone (--no-todo)"; return 0; fi
     if [[ -f "$HOME/todo/todo.sh" ]]; then skip "~/todo already present"; return 0; fi
     if run git clone --quiet "$TODO_REPO" "$HOME/todo"; then
         done_ "cloned $TODO_REPO → ~/todo"

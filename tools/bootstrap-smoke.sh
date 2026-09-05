@@ -5,7 +5,9 @@
 # The only test that catches "it worked here because this laptop already had
 # it". Mounts this tree and ~/todo read-only, clones both inside a throwaway
 # container as an unprivileged user with passwordless sudo, runs the full
-# bootstrap (minus docker: no systemd in a container), and prints the summary.
+# bootstrap (minus docker: no systemd in a container; minus todo when there is
+# no ~/todo to mount — the repo is private and the container has no key), and
+# prints the summary.
 # Image comes from SMOKE_IMAGE in config/bootstrap.conf (or BX_SMOKE_IMAGE).
 # The container gets a `git clone` of this tree, i.e. HEAD — commit first;
 # uncommitted edits are not exercised.
@@ -24,8 +26,8 @@ if ! docker info >/dev/null 2>&1; then
     else echo "bootstrap-smoke: cannot reach the docker daemon (not in the docker group yet? log out/in, or: sudo -v)" >&2; exit 1; fi
 fi
 
-TODO_MOUNT=()
-[[ -d "$HOME/todo/.git" ]] && TODO_MOUNT=(-v "$HOME/todo:/src-todo:ro" -e BX_TODO_REPO=/src-todo)
+TODO_MOUNT=() TODO_FLAG=--no-todo
+[[ -d "$HOME/todo/.git" ]] && { TODO_MOUNT=(-v "$HOME/todo:/src-todo:ro" -e BX_TODO_REPO=/src-todo); TODO_FLAG=; }
 
 name="bx-smoke-$(date +%s)"
 rm_flag=(--rm); (( KEEP )) && rm_flag=()
@@ -33,7 +35,7 @@ rm_flag=(--rm); (( KEEP )) && rm_flag=()
 printf '── bootstrap-smoke: %s ──\n' "$IMAGE" >&2
 "${DOCKER[@]}" run "${rm_flag[@]}" --name "$name" \
     -v "$BX_HOME:/src:ro" "${TODO_MOUNT[@]}" \
-    -e DEBIAN_FRONTEND=noninteractive \
+    -e DEBIAN_FRONTEND=noninteractive -e BX_TODO_FLAG="$TODO_FLAG" \
     "$IMAGE" bash -euo pipefail -c '
         apt-get update -q >/dev/null
         apt-get install -y -q git curl sudo ca-certificates >/dev/null
@@ -46,7 +48,7 @@ printf '── bootstrap-smoke: %s ──\n' "$IMAGE" >&2
             git clone -q /src ~/dotfiles
             git -C ~/dotfiles remote set-url origin git@github.com:IKafle/dotfiles.git
             ${BX_TODO_REPO:+export BX_TODO_REPO=$BX_TODO_REPO;}
-            bash ~/dotfiles/tools/bootstrap.sh --no-docker
+            bash ~/dotfiles/tools/bootstrap.sh --no-docker $BX_TODO_FLAG
         "
     '
 rc=$?
