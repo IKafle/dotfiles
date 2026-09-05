@@ -9,7 +9,7 @@ bc
 jq
 zip
 unzip
-p7zip-full
+7zip
 python3
 vim
 emacs

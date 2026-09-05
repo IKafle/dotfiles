@@ -141,7 +141,7 @@ check_soft() {
     fi
 
     if have iwgetid; then have_soft iwgetid "enables wifi SSID"
-    else miss_soft iwgetid "disables wifi SSID" "sudo apt install wireless-tools"
+    else miss_soft iwgetid "disables wifi SSID" "sudo apt install wireless-tools (absent on Ubuntu 26.04+: iw fallback is used)"
          SOFT_FAIL=$((SOFT_FAIL + 1)); fi
 
     if have pactl; then have_soft pactl "enables audio (vol + mic)"
