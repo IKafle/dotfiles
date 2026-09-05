@@ -10,8 +10,10 @@ except (json.JSONDecodeError, ValueError):
     sys.exit(0)
 
 model_name = data.get('model', {}).get('display_name', 'Unknown')
-total_input_tokens = data.get('context_window', {}).get('total_input_tokens', 0) or 0
-used_percentage = data.get('context_window', {}).get('used_percentage', 0) or 0
+context_window = data.get('context_window') or {}
+total_input_tokens = context_window.get('total_input_tokens') or 0
+used_percentage = context_window.get('used_percentage') or 0
+context_window_size = context_window.get('context_window_size') or 0
 cwd = (
     data.get('workspace', {}).get('current_dir')
     or data.get('cwd')
@@ -44,7 +46,8 @@ def derive_limit(tokens, pct):
 
 
 tokens_display = format_tokens(total_input_tokens)
-limit = derive_limit(total_input_tokens, used_percentage)
+# Prefer the size Claude Code reports; derive it only for older payloads.
+limit = context_window_size or derive_limit(total_input_tokens, used_percentage)
 limit_display = f" / {format_tokens(limit)}" if limit else ""
 
 if used_percentage >= 90:

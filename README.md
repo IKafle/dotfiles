@@ -132,7 +132,7 @@ full-width stacked layout on narrow terminals. Resize, then open a new terminal
 | `docker-init`              | install docker-ce + compose on Ubuntu    |
 | `docker-desktop-init`      | install Docker Desktop (KVM-isolated)    |
 | `vault-init`               | bootstrap `~/vault` workspace            |
-| `claude-init`              | install Claude Code CLI                  |
+| `claude-init`              | wire the Claude Code status line         |
 | `geekbar-doctor`           | diagnose the geekbar plugin install      |
 | `geekbar-test`             | render the bar + dropdown to stdout      |
 

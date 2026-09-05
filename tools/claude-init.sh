@@ -1,10 +1,11 @@
 #!/bin/bash
-# bx-purpose: install Claude Code CLI + status line config
+# bx-purpose: wire Claude Code's status line to ~/.bin/claude/statusline.py (idempotent)
 #
 # claude-init.sh
 # ─────────────────────────────────────────────────────────────────────────────
 # Sets up Claude Code's status line on a fresh machine so every laptop you
 # use shows the same prompt: model name, cwd, git branch, and token usage.
+# Does NOT install the Claude Code CLI itself.
 #
 # Safe to run multiple times — skips any work that is already done.
 #
@@ -131,10 +132,11 @@ if not isinstance(data, dict):
     print("NOT_OBJECT")
     sys.exit(0)
 
+# No refreshInterval: the script shows nothing time-based, and Claude Code
+# already re-runs it on every event. A 1s timer would fork python each second.
 desired = {
     "type": "command",
     "command": "~/.claude/statusline.py",
-    "refreshInterval": 1,
 }
 
 before = json.dumps(data, sort_keys=True)
@@ -191,7 +193,7 @@ smoke_test() {
     echo "── Step 5: Smoke test ───────────────────────────────────"
     # Feed the statusline a minimal payload and check it prints something
     local out
-    if out=$(printf '%s' '{"model":{"display_name":"sanity"},"cwd":"'"$H"'","context_window":{"total_input_tokens":1000,"used_percentage":1}}' \
+    if out=$(printf '%s' '{"model":{"display_name":"sanity"},"cwd":"'"$H"'","context_window":{"total_input_tokens":1000,"context_window_size":200000,"used_percentage":1}}' \
              | python3 "$SRC_SCRIPT" 2>&1) && [ -n "$out" ]; then
         ok "statusline.py runs cleanly"
         echo "      sample → $out"
