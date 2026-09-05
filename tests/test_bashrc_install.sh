@@ -38,8 +38,11 @@ test_missing_bashrc_is_created_without_backup() {
 }
 
 test_non_interactive_shell_loads_nothing() {
+    # The parent shell (a terminal, the pre-commit hook) has usually already
+    # loaded bx and exported BX_MODULES_LOADED; drop it so we measure init.sh.
     local out
-    out=$(bash -c '. "'"$HERE"'/../init.sh"; echo "${BX_MODULES_LOADED:-none}"' 2>&1)
+    out=$(env -u BX_MODULES_LOADED -u BX_FORCE_LOAD \
+        bash -c '. "'"$HERE"'/../init.sh"; echo "${BX_MODULES_LOADED:-none}"' 2>&1)
     assert_eq "$out" "none"
 }
 

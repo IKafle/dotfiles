@@ -85,6 +85,7 @@ Modules load in filename order. Prefixes: `10-` env, `20-` aliases,
 | `rofi-init` | bind Super-d to the rofi launcher (GNOME custom shortcut) |
 | `rofi-launcher` | what Super-d runs: `rofi -show drun` |
 | `geekbar-doctor` | check geekbar's dependencies and install |
+| `bootstrap-smoke` | run bootstrap in a clean Ubuntu container, prove a fresh machine comes up green |
 
 ## Plugins
 
