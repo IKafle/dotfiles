@@ -15,13 +15,14 @@ bash dotfiles/tools/bootstrap.sh --dry-run  # preview first if you like
 `bootstrap` is the single entrypoint and is idempotent — re-run it any time
 with `bx run bootstrap`; every step skips itself when already done. By default
 it relocates the tree to `~/.bin`, runs `bx install`, installs the apt
-packages the modules and geekbar rely on, sets up the GitHub CLI and the
-Claude Code status line, then runs `bx doctor` + `bx selftest` in a fresh
-shell. Heavier or opinionated steps are opt-in:
+packages the modules and geekbar rely on, clones the todo app to `~/todo`,
+sets up the GitHub CLI and the Claude Code status line, then runs
+`bx doctor` + `bx selftest` in a fresh shell. Heavier or opinionated steps
+are opt-in:
 
 | flag                | effect                                                    |
 |---------------------|-----------------------------------------------------------|
-| `--todo-repo <url>` | clone the todo app to `~/todo` (or set `BX_TODO_REPO`)    |
+| `--todo-repo <url>` | override the todo app repo (default `IKafle/todo`, or `BX_TODO_REPO`) |
 | `--docker`          | run `docker-init` (adds Docker's apt repo)                |
 | `--geekbar`         | install the Argos GNOME extension, enable the plugin      |
 | `--vault`           | run `vault-init` (also sweeps loose files from `~`)       |

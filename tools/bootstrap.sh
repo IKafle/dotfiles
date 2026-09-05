@@ -6,7 +6,7 @@
 #   bx run bootstrap [flags]            # re-run any time; every step is a no-op when already done
 #
 # Flags:
-#   --todo-repo <url>   clone the todo app to ~/todo (or set BX_TODO_REPO)
+#   --todo-repo <url>   todo app repo to clone to ~/todo (default: BX_TODO_REPO or git@github.com:IKafle/todo.git)
 #   --docker            run docker-init (adds Docker's apt repo, installs engine + compose)
 #   --geekbar           install the Argos GNOME extension and enable the geekbar plugin
 #   --vault             run vault-init (creates ~/vault AND sweeps loose files from ~ into it)
@@ -27,7 +27,7 @@ ROOT=$(dirname "$(dirname "$SELF")")
 DRY_RUN=0
 WITH_DOCKER=0 WITH_GEEKBAR=0 WITH_VAULT=0
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
-TODO_REPO="${BX_TODO_REPO:-}"
+TODO_REPO="${BX_TODO_REPO:-git@github.com:IKafle/todo.git}"
 ARGOS_UUID="argos@pew.worldwidemann.com"
 
 APT_PACKAGES=(
@@ -212,14 +212,10 @@ apt_packages() {
 todo_app() {
     phase "todo app (~/todo)"
     if [[ -f "$HOME/todo/todo.sh" ]]; then skip "~/todo already present"; return 0; fi
-    if [[ -z "$TODO_REPO" ]]; then
-        skip "no --todo-repo / BX_TODO_REPO given — the today column in the MOTD stays hidden"
-        return 0
-    fi
     if run git clone --quiet "$TODO_REPO" "$HOME/todo"; then
         done_ "cloned $TODO_REPO → ~/todo"
     else
-        failed "git clone $TODO_REPO"
+        failed "git clone $TODO_REPO — the today column in the MOTD stays hidden until ~/todo exists"
     fi
 }
 
