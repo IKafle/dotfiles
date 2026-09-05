@@ -13,22 +13,25 @@ bash dotfiles/tools/bootstrap.sh --dry-run  # preview first if you like
 ```
 
 `bootstrap` is the single entrypoint and is idempotent — re-run it any time
-with `bx run bootstrap`; every step skips itself when already done. By default
-it relocates the tree to `~/.bin`, runs `bx install`, installs the apt
-packages the modules and geekbar rely on, enforces the global git identity
-(bx is its source of truth), clones the todo app to `~/todo`,
-sets up the GitHub CLI and the Claude Code status line, then runs
-`bx doctor` + `bx selftest` in a fresh shell. Heavier or opinionated steps
-are opt-in:
+with `bx run bootstrap`; every step skips itself when already done. It
+relocates the tree to `~/.bin`, runs `bx install`, enforces the global git
+identity (bx is its source of truth), installs every apt package the modules,
+plugins and tools call, clones the todo app to `~/todo`, installs the GitHub CLI, the Claude Code CLI + status line, Docker, and the
+Argos extension + geekbar plugin (GNOME only), then runs `bx doctor` +
+`bx selftest` in a fresh shell. Each step can be skipped:
 
 | flag                | effect                                                    |
 |---------------------|-----------------------------------------------------------|
 | `--todo-repo <url>` | override the todo app repo (default `IKafle/todo`, or `BX_TODO_REPO`) |
 | `--git-name` `--git-email` | global git identity to enforce (or `BX_GIT_NAME` / `BX_GIT_EMAIL`) |
-| `--docker`          | run `docker-init` (adds Docker's apt repo)                |
-| `--geekbar`         | install the Argos GNOME extension, enable the plugin      |
-| `--vault`           | run `vault-init` (also sweeps loose files from `~`)       |
-| `--no-apt` `--no-gh` `--no-claude` `--no-verify` | skip that step              |
+| `--no-apt` `--no-gh` `--no-claude` | skip that installer                       |
+| `--no-docker` `--no-geekbar` | skip that installer                             |
+| `--vault`           | run `vault-init` (opt-in: it sweeps loose files from `~` into `~/vault`) |
+| `--no-verify`       | skip doctor/selftest/tests at the end                     |
+| `--dry-run`         | print what would happen; change nothing                   |
+
+Cloud CLIs (aws/gcloud/az/kubectl) and language version managers are not
+installed: the modules degrade gracefully without them.
 
 ## Quick start
 

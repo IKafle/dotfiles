@@ -9,12 +9,12 @@
 #   --todo-repo <url>   todo app repo to clone to ~/todo (default: BX_TODO_REPO or git@github.com:IKafle/todo.git)
 #   --git-name <name>   global git identity to enforce (default: BX_GIT_NAME or "ishwor kafle")
 #   --git-email <addr>  ... and its email (default: BX_GIT_EMAIL or hello.ishworkafle@gmail.com)
-#   --docker            run docker-init (adds Docker's apt repo, installs engine + compose)
-#   --geekbar           install the Argos GNOME extension and enable the geekbar plugin
-#   --vault             run vault-init (creates ~/vault AND sweeps loose files from ~ into it)
 #   --no-apt            skip the apt package step
 #   --no-gh             skip GitHub CLI install
-#   --no-claude         skip Claude Code status-line setup
+#   --no-claude         skip Claude Code CLI install + status-line setup
+#   --no-docker         skip docker-init (Docker's apt repo, engine + compose)
+#   --no-geekbar        skip the Argos GNOME extension + geekbar plugin
+#   --vault             run vault-init (creates ~/vault AND sweeps loose files from ~ into it)
 #   --no-verify         skip doctor/selftest/tests at the end
 #   --dry-run           print what would happen; change nothing
 #
@@ -27,16 +27,26 @@ SELF=$(readlink -f "${BASH_SOURCE[0]}")
 ROOT=$(dirname "$(dirname "$SELF")")
 
 DRY_RUN=0
-WITH_DOCKER=0 WITH_GEEKBAR=0 WITH_VAULT=0
+WITH_DOCKER=1 WITH_GEEKBAR=1 WITH_VAULT=0
 SKIP_APT=0 SKIP_GH=0 SKIP_CLAUDE=0 SKIP_VERIFY=0
 TODO_REPO="${BX_TODO_REPO:-git@github.com:IKafle/todo.git}"
 GIT_NAME="${BX_GIT_NAME:-ishwor kafle}"
 GIT_EMAIL="${BX_GIT_EMAIL:-hello.ishworkafle@gmail.com}"
 ARGOS_UUID="argos@pew.worldwidemann.com"
 
+# Every external command the modules, plugins and tools call, mapped to its
+# Ubuntu package. Cloud CLIs (aws/gcloud/az/kubectl) and language version
+# managers are deliberately absent: they are project tooling, not harness deps.
 APT_PACKAGES=(
-    iproute2 lm-sensors ncdu htop iotop libnotify-bin network-manager
-    wireguard-tools wl-clipboard xclip bc jq vim python3 fonts-jetbrains-mono
+    # base / shell
+    curl wget gnupg ca-certificates openssh-client gawk bc jq zip unzip p7zip-full
+    python3 vim emacs fonts-jetbrains-mono
+    # system / hardware
+    iproute2 lm-sensors htop iotop ncdu lsof upower cpu-checker
+    # network
+    network-manager wireguard-tools wireless-tools iw traceroute bmon nload
+    # desktop
+    libnotify-bin xdg-utils wl-clipboard xclip pulseaudio-utils cowsay
 )
 
 FAILED=() SKIPPED=() DONE=()
@@ -83,8 +93,8 @@ parse_args() {
             --git-email)   [[ -n "${2:-}" ]] || { bx_err "--git-email needs a value"; exit 2; }
                            GIT_EMAIL=$2; shift ;;
             --git-email=*) GIT_EMAIL=${1#*=} ;;
-            --docker)      WITH_DOCKER=1 ;;
-            --geekbar)     WITH_GEEKBAR=1 ;;
+            --no-docker)   WITH_DOCKER=0 ;;
+            --no-geekbar)  WITH_GEEKBAR=0 ;;
             --vault)       WITH_VAULT=1 ;;
             --no-apt)      SKIP_APT=1 ;;
             --no-gh)       SKIP_GH=1 ;;
@@ -227,12 +237,22 @@ apt_packages() {
         return 0
     fi
     bx_info "installing: ${missing[*]}"
-    if (( DRY_RUN )); then bx_dim "  [dry-run] sudo apt-get install -y ${missing[*]}"; return 0; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] sudo apt-get update && sudo apt-get install -y ${missing[*]}"; return 0; fi
     need_sudo "apt-get install" || { failed "sudo unavailable for apt"; return 1; }
-    if sudo apt-get install -y -q "${missing[@]}"; then
+    sudo apt-get update -q >/dev/null 2>&1 || bx_warn "apt-get update failed — installing from the current index"
+    if sudo apt-get install -y -q "${missing[@]}" >/dev/null 2>&1; then
         done_ "apt: ${missing[*]}"
+        return 0
+    fi
+    # One unknown package name must not sink the whole batch: retry singly.
+    local bad=()
+    for p in "${missing[@]}"; do
+        sudo apt-get install -y -q "$p" >/dev/null 2>&1 || bad+=("$p")
+    done
+    if (( ${#bad[@]} )); then
+        failed "apt: could not install ${bad[*]}"
     else
-        failed "apt-get install ${missing[*]}"
+        done_ "apt: ${missing[*]}"
     fi
 }
 
@@ -249,11 +269,10 @@ todo_app() {
 
 vault() {
     phase "vault (~/vault)"
-    if (( ! WITH_VAULT )); then
-        skip "vault-init not requested (--vault); note it also sweeps loose files from ~ into ~/vault"
-        return 0
-    fi
-    if run bash "$TARGET/tools/vault-init.sh"; then done_ "vault-init"; else failed "vault-init"; fi
+    if (( ! WITH_VAULT )); then skip "vault-init not requested (--vault); it sweeps loose files from ~ into ~/vault"; return 0; fi
+    if [[ -d "$HOME/vault/inbox" && -d "$HOME/vault/code" ]]; then skip "~/vault already laid out"; return 0; fi
+    bx_info "vault-init also sweeps loose files from ~, ~/Documents and ~/Desktop into ~/vault"
+    if run bash "$TARGET/tools/vault-init.sh" >/dev/null; then done_ "vault-init"; else failed "vault-init"; fi
 }
 
 ssh_key_hint() {
@@ -275,6 +294,19 @@ github_cli() {
     if bash "$TARGET/tools/install-gh.sh"; then done_ "gh installed"; else failed "install-gh"; fi
 }
 
+claude_cli() {
+    phase "Claude Code CLI"
+    if (( SKIP_CLAUDE )); then skip "claude CLI (--no-claude)"; return 0; fi
+    if command -v claude >/dev/null || [[ -x "$HOME/.local/bin/claude" ]]; then skip "claude already installed"; return 0; fi
+    if (( DRY_RUN )); then bx_dim "  [dry-run] curl -fsSL https://claude.ai/install.sh | bash"; return 0; fi
+    # Official native installer: user-local (~/.local/bin), no sudo, self-updating.
+    if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1; then
+        done_ "claude CLI installed to ~/.local/bin (run \`claude\` once to log in)"
+    else
+        failed "claude CLI install — see https://code.claude.com/docs/en/setup"
+    fi
+}
+
 claude_statusline() {
     phase "Claude Code status line"
     if (( SKIP_CLAUDE )); then skip "claude-init (--no-claude)"; return 0; fi
@@ -290,12 +322,11 @@ claude_statusline() {
     else
         failed "claude-init"
     fi
-    command -v claude >/dev/null || bx_warn "claude CLI itself is not installed — see https://claude.com/claude-code"
 }
 
 docker_engine() {
     phase "Docker"
-    if (( ! WITH_DOCKER )); then skip "docker-init not requested (--docker)"; return 0; fi
+    if (( ! WITH_DOCKER )); then skip "docker-init (--no-docker)"; return 0; fi
     if command -v docker >/dev/null; then skip "docker already installed"; return 0; fi
     if (( DRY_RUN )); then bx_dim "  [dry-run] bx run docker-init"; return 0; fi
     need_sudo "docker-init" || { failed "sudo unavailable for docker-init"; return 1; }
@@ -324,7 +355,7 @@ install_argos() {
 
 geekbar() {
     phase "geekbar"
-    if (( ! WITH_GEEKBAR )); then skip "geekbar not requested (--geekbar)"; return 0; fi
+    if (( ! WITH_GEEKBAR )); then skip "geekbar (--no-geekbar)"; return 0; fi
     if ! command -v gnome-extensions >/dev/null; then skip "not a GNOME session"; return 0; fi
     if argos_installed; then
         skip "Argos extension present"
@@ -403,6 +434,7 @@ main() {
     vault
     ssh_key_hint
     github_cli
+    claude_cli
     claude_statusline
     docker_engine
     geekbar
